@@ -1,0 +1,8 @@
+# Feature map for `radar impact` (glob -> feature name, matched on posix relpath)
+features:
+  Authentication: ["demo/app/routes/auth*", "demo/app/utils/validate*"]
+  Users: ["demo/app/routes/users*", "demo/app/services/*"]
+  Diagnostics: ["demo/app/routes/tools*"]
+exclude:
+  - "rules/*"
+  - "tests/fixtures/*"
