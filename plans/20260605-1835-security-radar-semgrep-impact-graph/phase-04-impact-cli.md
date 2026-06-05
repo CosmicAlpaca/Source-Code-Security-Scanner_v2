@@ -7,7 +7,7 @@
 
 ## Overview
 
-- **Priority**: P0 — đây là tính năng "sửa cái này ảnh hưởng cái gì" | **Status**: pending
+- **Priority**: P0 — đây là tính năng "sửa cái này ảnh hưởng cái gì" | **Status**: complete
 - `radar impact --diff <rev> | --staged | --function <name>` → function bị sửa → reverse BFS → function/API bị ảnh hưởng, output rich terminal.
 
 ## Key Insights
@@ -61,11 +61,11 @@ Summary: 3 functions, 2 APIs affected (1 approximate)
 
 ## Todo List
 
-- [ ] diff_mapper: --diff/--staged + hunk parse + line→node
-- [ ] tracer: reverse BFS + depth + confidence + API rollup
-- [ ] terminal.py rich output
-- [ ] CLI impact 3 mode + auto-rebuild
-- [ ] Tests git-repo-tạm pass
+- [x] diff_mapper: --diff/--staged + hunk parse + line→node
+- [x] tracer: reverse BFS + depth + confidence + API rollup
+- [x] terminal.py rich output
+- [x] CLI impact 3 mode + auto-rebuild
+- [x] Tests git-repo-tạm pass
 
 ## Success Criteria
 

@@ -8,7 +8,7 @@
 
 ## Overview
 
-- **Priority**: P0 — trái tim của subsystem 2 | **Status**: pending
+- **Priority**: P0 — trái tim của subsystem 2 | **Status**: complete
 - Graph model + builder + plugin interface + extractor JS/TS đầu tiên. Output: `radar build .` → `.radar/graph.json`.
 
 ## Key Insights
@@ -65,12 +65,12 @@ Create:
 
 ## Todo List
 
-- [ ] model.py + serialize round-trip test
-- [ ] base.py plugin interface + registry
-- [ ] javascript.py: defs/calls/imports/routes (JS + TS grammar)
-- [ ] builder.py 2-pass resolve + skip dirs
-- [ ] CLI build + rich summary
-- [ ] Fixture js-app + tests pass
+- [x] model.py + serialize round-trip test
+- [x] base.py plugin interface + registry
+- [x] javascript.py: defs/calls/imports/routes (JS + TS grammar)
+- [x] builder.py 2-pass resolve + skip dirs
+- [x] CLI build + rich summary
+- [x] Fixture js-app + tests pass
 
 ## Success Criteria
 

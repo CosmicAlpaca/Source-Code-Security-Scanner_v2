@@ -6,8 +6,10 @@
 
 ## Overview
 
-- **Priority**: P1 | **Status**: pending
+- **Priority**: P1 | **Status**: complete
 - Chứng minh kiến trúc plugin: thêm Python extractor KHÔNG sửa core. Thêm tầng "feature" qua `radar.config.yml`.
+
+> **Note**: Python plugin = 1 file mới `python.py` + tách helper `javascript_imports.py`, 0 thay đổi core → success criterion #3 ("thêm ngôn ngữ = 1 file plugin") đã validate.
 
 ## Key Insights
 
@@ -59,11 +61,11 @@ Modify:
 
 ## Todo List
 
-- [ ] python.py extractor + tests
-- [ ] Registry-only integration (đo: diff core = 0 dòng ngoài builder feature/exclude)
-- [ ] config.py + tests (glob edge cases, file thiếu → default)
-- [ ] Feature trong output impact
-- [ ] Mixed-language fixture test
+- [x] python.py extractor + tests
+- [x] Registry-only integration (đo: diff core = 0 dòng ngoài builder feature/exclude)
+- [x] config.py + tests (glob edge cases, file thiếu → default)
+- [x] Feature trong output impact
+- [x] Mixed-language fixture test
 
 ## Success Criteria
 

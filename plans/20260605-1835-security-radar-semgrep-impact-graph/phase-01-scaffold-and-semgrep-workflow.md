@@ -9,8 +9,10 @@
 ## Overview
 
 - **Priority**: P0 — nền tảng cho mọi phase sau
-- **Status**: pending
+- **Status**: complete-local-pending-github-verify
 - Tạo repo mới `E:\Documents\AI_Vin\security-radar` (git init + GitHub repo) + workflow Semgrep chạy được thật: scan đa ngôn ngữ → SARIF lên Security tab + JSON artifact.
+
+> **Note**: repo dùng remote sẵn có `CosmicAlpaca/Source-Code-Security-Scanner_v2` (public) thay vì tạo repo mới `security-radar`.
 
 ## Key Insights
 
@@ -91,12 +93,12 @@ jobs:
 
 ## Todo List
 
-- [ ] Repo mới + GitHub public repo + push
-- [ ] Python package skeleton (`radar --help` chạy)
-- [ ] security-scan.yml đủ 4 trigger
+- [x] Repo mới + GitHub public repo + push
+- [x] Python package skeleton (`radar --help` chạy)
+- [x] security-scan.yml đủ 4 trigger
 - [ ] SARIF hiện trên tab Security (verify bằng PR thật)
 - [ ] Artifact JSON tải được
-- [ ] README mô tả 2 subsystem
+- [x] README mô tả 2 subsystem
 
 ## Success Criteria
 

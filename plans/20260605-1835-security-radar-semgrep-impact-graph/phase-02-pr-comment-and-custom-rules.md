@@ -8,7 +8,7 @@
 
 ## Overview
 
-- **Priority**: P1 | **Status**: pending
+- **Priority**: P1 | **Status**: complete-local-pending-github-verify
 - Bot comment kết quả Semgrep vào PR (bảng severity/file/line/message) + 4-5 rule tự viết chứng minh hiểu Semgrep (điểm demo quan trọng).
 
 ## Key Insights
@@ -79,11 +79,11 @@ Modify:
 
 ## Todo List
 
-- [ ] 5 custom rules + fixtures, `semgrep --test` pass
-- [ ] render-pr-comment.py + unit test (pytest, fixture JSON)
+- [x] 5 custom rules + fixtures, `semgrep --test` pass
+- [x] render-pr-comment.py + unit test (pytest, fixture JSON)
 - [ ] Job pr-comment upsert comment (test PR thật)
-- [ ] Job rule-tests trong CI
-- [ ] Workflow bật `--config rules/`
+- [x] Job rule-tests trong CI
+- [x] Workflow bật `--config rules/`
 
 ## Success Criteria
 

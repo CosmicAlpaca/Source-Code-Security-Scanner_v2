@@ -7,7 +7,7 @@
 
 ## Overview
 
-- **Priority**: P1 — phase "đóng gói để demo" | **Status**: pending
+- **Priority**: P1 — phase "đóng gói để demo" | **Status**: complete-local-pending-github-verify
 - Export JSON/Mermaid/HTML; job CI chạy `radar impact` trên PR và comment; demo app có lỗ hổng + script demo end-to-end.
 
 ## Key Insights
@@ -63,12 +63,12 @@ Modify:
 
 ## Todo List
 
-- [ ] exporters.py 3 format + tests
-- [ ] Demo app + radar.config.yml (feature: Authentication, Users)
-- [ ] Job impact trong CI + comment gộp
+- [x] exporters.py 3 format + tests
+- [x] Demo app + radar.config.yml (feature: Authentication, Users)
+- [x] Job impact trong CI + comment gộp
 - [ ] Kịch bản demo chạy thật trên GitHub, chụp screenshot
-- [ ] README hoàn chỉnh
-- [ ] Full test suite xanh
+- [x] README hoàn chỉnh
+- [x] Full test suite xanh
 
 ## Success Criteria
 
