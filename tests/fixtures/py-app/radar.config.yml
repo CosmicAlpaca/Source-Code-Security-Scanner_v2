@@ -1,0 +1,4 @@
+features:
+  Authentication: ["app/routes/auth*", "app/utils/validate*"]
+  Administration: ["app/routes/admin*"]
+exclude: ["**/migrations/**"]

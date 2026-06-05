@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>security-radar — impact report</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 960px; color: #222; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 14px; }
+    th { background: #f5f5f5; }
+    code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
+    .changed { color: #c00; font-weight: 600; }
+    .approx { color: #b80; }
+    .summary { background: #f8f8f8; border-left: 4px solid #36c; padding: 8px 14px; }
+  </style>
+</head>
+<body>
+  <h1>📡 security-radar — impact report</h1>
+  <p class="summary">
+    <strong>{{ result.stats.functions_affected }}</strong> functions,
+    <strong>{{ result.stats.apis_affected }}</strong> APIs,
+    <strong>{{ result.stats.features_affected }}</strong> features affected
+    {% if result.stats.approximate %} ({{ result.stats.approximate }} approximate){% endif %}
+  </p>
+
+  <h2>Changed</h2>
+  <table>
+    <tr><th>Function</th><th>File</th><th>Routes</th><th>Feature</th></tr>
+    {% for item in result.changed %}
+    <tr>
+      <td class="changed"><code>{{ item.name }}</code></td>
+      <td><code>{{ item.file }}:{{ item.line }}</code></td>
+      <td>{{ item.routes | join(", ") or "—" }}</td>
+      <td>{{ item.feature or "(unmapped)" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Affected</h2>
+  <table>
+    <tr><th>Name</th><th>Kind</th><th>File</th><th>Depth</th><th>Confidence</th><th>Feature</th></tr>
+    {% for item in result.affected %}
+    <tr>
+      <td><code>{{ item.name }}</code></td>
+      <td>{{ item.kind }}</td>
+      <td><code>{{ item.file }}:{{ item.line }}</code></td>
+      <td>{{ item.depth }}</td>
+      <td{% if item.confidence == name_only %} class="approx"{% endif %}>{{ item.confidence }}</td>
+      <td>{{ item.feature or "(unmapped)" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Graph</h2>
+  <pre class="mermaid">
+{{ mermaid }}
+  </pre>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true });
+  </script>
+</body>
+</html>
