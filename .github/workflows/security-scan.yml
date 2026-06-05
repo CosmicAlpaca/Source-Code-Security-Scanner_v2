@@ -1,0 +1,122 @@
+name: Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "20 17 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep scan
+        run: >
+          semgrep scan
+          --config p/security-audit
+          --config p/secrets
+          --config p/owasp-top-ten
+          --config rules/
+          --exclude rules
+          --json --output semgrep.json
+          --sarif-output=semgrep.sarif
+          --metrics off
+        continue-on-error: true
+      - name: Upload SARIF to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        if: always()
+      - name: Upload JSON report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep.*
+        if: always()
+
+  rule-tests:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test custom rules against fixtures
+        run: semgrep --test --metrics off rules/
+
+  impact:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install radar
+        run: pip install .
+      - name: Build graph + trace impact
+        run: |
+          radar build .
+          radar impact --diff "origin/${{ github.base_ref }}...HEAD" --format json > impact.json
+          radar impact --diff "origin/${{ github.base_ref }}...HEAD" --format html > impact.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: impact-report
+          path: |
+            impact.json
+            impact.html
+        if: always()
+
+  pr-comment:
+    needs: [semgrep, impact]
+    if: >-
+      !cancelled() && needs.semgrep.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: semgrep-report
+      - uses: actions/download-artifact@v4
+        with:
+          name: impact-report
+        continue-on-error: true
+      - name: Render comment markdown
+        run: |
+          if [ -f impact.json ]; then
+            python3 scripts/render-pr-comment.py semgrep.json impact.json > comment.md
+          else
+            python3 scripts/render-pr-comment.py semgrep.json > comment.md
+          fi
+      - name: Upsert PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('comment.md', 'utf8');
+            const {data: comments} = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const prev = comments.find(c => c.body.includes('<!-- security-radar -->'));
+            if (prev) {
+              await github.rest.issues.updateComment({...context.repo, comment_id: prev.id, body});
+            } else {
+              await github.rest.issues.createComment({...context.repo, issue_number: context.issue.number, body});
+            }
