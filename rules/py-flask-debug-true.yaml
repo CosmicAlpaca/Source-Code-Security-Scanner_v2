@@ -1,0 +1,14 @@
+rules:
+  - id: py-flask-debug-true
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Flask app.run(debug=True) enables the Werkzeug interactive debugger,
+      which allows arbitrary code execution if exposed. Disable debug mode in
+      production (use FLASK_DEBUG env var for local development).
+    metadata:
+      category: security
+      cwe: "CWE-489: Active Debug Code"
+      owasp: "A05:2021 - Security Misconfiguration"
+      confidence: HIGH
+    pattern: $APP.run(..., debug=True, ...)

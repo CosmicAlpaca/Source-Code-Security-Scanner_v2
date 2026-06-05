@@ -1,0 +1,25 @@
+rules:
+  - id: js-sql-string-concat
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      SQL query is built from string concatenation or template interpolation,
+      which allows SQL injection. Use parameterized queries instead, e.g.
+      db.query("SELECT ... WHERE id = ?", [id]).
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      owasp: "A03:2021 - Injection"
+      confidence: MEDIUM
+      references:
+        - https://owasp.org/www-community/attacks/SQL_Injection
+    pattern-either:
+      - pattern: $DB.query($A + $B, ...)
+      - pattern: $DB.execute($A + $B, ...)
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.query($Q, ...)
+              - pattern: $DB.execute($Q, ...)
+          - metavariable-regex:
+              metavariable: $Q
+              regex: ".*\\$\\{.*"

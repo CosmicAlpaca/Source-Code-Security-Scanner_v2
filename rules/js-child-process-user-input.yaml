@@ -1,0 +1,26 @@
+rules:
+  - id: js-child-process-user-input
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      User-controlled input (req.query/body/params) flows into a child_process
+      exec call — command injection. Use execFile with an argument array, or
+      validate/allowlist the input.
+    metadata:
+      category: security
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    pattern-sources:
+      - pattern: req.query
+      - pattern: req.body
+      - pattern: req.params
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec($CMD, ...)
+              - pattern: execSync($CMD, ...)
+              - pattern: $CP.exec($CMD, ...)
+              - pattern: $CP.execSync($CMD, ...)
+          - focus-metavariable: $CMD
