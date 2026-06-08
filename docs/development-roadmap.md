@@ -1,11 +1,11 @@
 # Development Roadmap — security-radar
 
 > Living document theo dõi tiến độ. Yêu cầu sản phẩm & milestone gốc xem [PRD §7](./security-radar-prd.md). Chi tiết bản phát hành xem [Changelog](./project-changelog.md).
-> Cập nhật: 2026-06-06
+> Cập nhật: 2026-06-08
 
 ## Trạng thái tổng quan
 
-Bản hiện thực đầu tiên hoàn tất cục bộ — M1→M6 done. Còn 1 bước xác minh trước khi coi là Definition of Done đầy đủ ([PRD §8](./security-radar-prd.md)).
+Bản hiện thực đầu tiên hoàn tất cục bộ — M1→M6 done. **M7 (local CLI scan + zero-footprint)** done. Còn 1 bước xác minh GitHub trước khi coi là Definition of Done đầy đủ ([PRD §8](./security-radar-prd.md)).
 
 ## Milestones
 
@@ -17,8 +17,9 @@ Bản hiện thực đầu tiên hoàn tất cục bộ — M1→M6 done. Còn 1
 | M4 — Impact CLI | diff → blast radius + rich output | ✅ Done (local) |
 | M5 — Đa ngôn ngữ + feature | Python plugin + route detect + feature map | ✅ Done (local) |
 | M6 — Đóng gói demo | Exporters + impact-in-CI + demo app + README | ✅ Done (local) |
+| M7 — Local scan tool | `radar scan` (native→docker) + bundled rules + impact zero-footprint | ✅ Done |
 
-"Local" = hiện thực + 76 pytest + `semgrep --test` xanh trên máy; chưa verify trên GitHub Actions thật.
+"Local" = hiện thực + 103 pytest + `semgrep --test` xanh trên máy; chưa verify trên GitHub Actions thật.
 
 ## Đang làm
 

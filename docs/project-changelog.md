@@ -2,6 +2,29 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
+## [0.2.0] — 2026-06-08
+
+Biến security-radar thành **tool local hoàn chỉnh**: scan + impact chạy trên repo bất kỳ sau `pip install`, **không để lại dấu vết** lên repo đích.
+
+### Added
+
+- **`radar scan`** — quét Semgrep cục bộ, không cần CI. Tự phát hiện runtime: `semgrep` native → fallback Docker (`semgrep/semgrep:latest`) → lỗi rõ nếu thiếu cả hai. Dùng cùng preset (`p/security-audit` + `p/secrets` + `p/owasp-top-ten`) + bundled rules. Options: `--rules-only` (offline, bỏ preset), `--config` (thêm config), `--format terminal|json|sarif`, `--error`/`--fail-on` (gate exit code). Zero-footprint: Semgrep emit JSON ra stdout, parse trong RAM; Docker mount target read-only, `-w /src` cho path repo-relative.
+- **Module `scan/`** — `runner.py` (detect_runtime + run_semgrep), `findings.py` (normalize + summary + threshold), `report.py` (rich table + JSON).
+- **`radar impact --graph <file>`** — dùng graph có sẵn, bỏ qua auto-build.
+
+### Changed
+
+- **Custom rules đóng gói trong wheel**: `rules/` → `src/radar/rules/` (đi theo `pip install`, truy cập qua package path). CI workflow + `radar.config.yml` trỏ path mới.
+- **Impact zero-footprint**: auto-build ghi `graph.json` vào **cache ngoài repo** (`cache.py`: `$RADAR_CACHE` → `%LOCALAPPDATA%` → `~/.cache/radar`) thay vì `<repo>/.radar`. Thứ tự load: `--graph` → `<repo>/.radar` (nếu fresh, BC) → external cache → build vào cache. `radar build` vẫn ghi `.radar/` như cũ.
+
+### Fixed
+
+- **Windows subprocess decode**: `run_semgrep` ép `encoding="utf-8", errors="replace"` — trước đó `text=True` decode stderr Semgrep bằng cp1252 → `UnicodeDecodeError` crash reader thread.
+
+### Tests
+
+- 103 pytest (76 → 103, +27): `test_scan_runner` (argv native/docker, detect, parse), `test_scan_findings`, `test_scan_cli` (CliRunner mock), `test_cache` (zero-footprint integration).
+
 ## [0.1.0] — 2026-06-06
 
 Bản hiện thực đầu tiên — hoàn tất cả 6 phase (M1–M6) cục bộ. Verify end-to-end trên GitHub thật còn pending (xem [roadmap](./development-roadmap.md)).
