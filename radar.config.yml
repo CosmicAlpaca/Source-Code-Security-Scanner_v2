@@ -4,5 +4,5 @@ features:
   Users: ["demo/app/routes/users*", "demo/app/services/*"]
   Diagnostics: ["demo/app/routes/tools*"]
 exclude:
-  - "rules/*"
+  - "src/radar/rules/*"
   - "tests/fixtures/*"
