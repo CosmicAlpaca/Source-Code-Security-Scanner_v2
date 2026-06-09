@@ -5,7 +5,7 @@ rules:
     severity: ERROR
     message: >-
       User-controlled input (req.query/body/params) flows into a child_process
-      exec call — command injection. Use execFile with an argument array, or
+      exec call - command injection. Use execFile with an argument array, or
       validate/allowlist the input.
     metadata:
       category: security
