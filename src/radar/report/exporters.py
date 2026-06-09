@@ -52,7 +52,8 @@ def to_mermaid(result: ImpactResult) -> str:
         arrow = "-.->" if item.confidence == NAME_ONLY else "-->"
         lines.append(f"    {ids[item.parent]} {arrow} {ids[item.id]}")  # impact propagates outward
     for changed in result.changed:
-        lines.append(f"    style {ids[changed.id]} fill:#f88,stroke:#c00")
+        if changed.id in ids:
+            lines.append(f"    style {ids[changed.id]} fill:#f88,stroke:#c00")
     for item in items:
         if item.kind == "route" and item.id in ids and item not in result.changed:
             lines.append(f"    style {ids[item.id]} fill:#8f8,stroke:#080")

@@ -7,6 +7,7 @@ target repo (zero footprint). The bundled custom rules travel inside the wheel
 """
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -96,9 +97,17 @@ def run_semgrep(
     argv = build_argv(
         target, runtime, rules_only=rules_only, sarif=sarif, extra_config=extra_config
     )
+    # Force UTF-8 I/O for Semgrep: Windows may default to cp932/cp1252 which breaks
+    # YAML rule parsing when rule messages contain non-ASCII characters.
+    semgrep_env = os.environ.copy()
+    semgrep_env["PYTHONUTF8"] = "1"
+    semgrep_env["PYTHONIOENCODING"] = "utf-8"
     try:
         # encoding/errors explicit: semgrep emits UTF-8, but Windows defaults to cp1252 and crashes.
-        proc = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        proc = subprocess.run(
+            argv, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", env=semgrep_env,
+        )
     except OSError as exc:
         raise ScanError(f"Failed to launch Semgrep ({runtime}): {exc}") from exc
 

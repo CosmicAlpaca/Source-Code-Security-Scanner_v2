@@ -8,9 +8,13 @@ from rich.console import Console
 
 from radar import __version__
 
-# Legacy Windows consoles (cp1252) crash on unicode glyphs — degrade gracefully.
-if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(errors="replace")
+# On Windows (and any system whose locale isn't UTF-8) the default codec for
+# stdout/stderr can be cp932, cp1252, cp936, etc. — all too narrow for the
+# Unicode glyphs rich uses. Upgrade to UTF-8 with lossy fallback so the CLI
+# never crashes regardless of the machine's locale setting.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure") and getattr(_stream, "encoding", "").lower() != "utf-8":
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 console = Console()
 

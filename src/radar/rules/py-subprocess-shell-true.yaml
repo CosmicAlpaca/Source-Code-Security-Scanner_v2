@@ -4,7 +4,7 @@ rules:
     severity: ERROR
     message: >-
       subprocess called with shell=True and a dynamically-built command string
-      — command injection risk. Pass an argument list without shell=True, or
+      - command injection risk. Pass an argument list without shell=True, or
       use shlex.quote on every interpolated value.
     metadata:
       category: security

@@ -1,0 +1,19 @@
+rules:
+  - id: js-express-xss-res-send
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Potential Cross-Site Scripting (XSS) vulnerability (OWASP A03:2021).
+      Untrusted user input is being returned directly via `res.send()` or `res.write()` without sanitization.
+      An attacker could inject malicious JavaScript into the browser.
+      Use a sanitization library or return safe data types like JSON.
+    severity: ERROR
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.query
+      - pattern: $REQ.body
+      - pattern: $REQ.params
+    pattern-sinks:
+      - pattern: $RES.send(...)
+      - pattern: $RES.write(...)
