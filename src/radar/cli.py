@@ -68,9 +68,10 @@ def impact(rev, staged, function_name, path, max_depth, no_name_only, graph_path
 
     if function_name:
         changed_ids = find_function_nodes(graph, function_name)
-        if not changed_ids:
+        if not changed_ids and output_format == "terminal":
             console.print(f"[red]No function named '{function_name}' in the graph.[/]")
             return
+        # json/mermaid/html: fall through to emit a valid empty result, not plain text
     else:
         changes = changed_lines(root, rev=rev, staged=staged)
         changed_ids = map_to_nodes(graph, changes)
@@ -165,7 +166,8 @@ def _load_or_build_graph(root: Path, graph_override: Path | None = None):
     if cached is not None:
         return cached
 
-    console.print("[dim]building graph (cached outside the repo)…[/]")
+    # progress on stderr so json/sarif/mermaid/html stay pure on stdout
+    click.echo("building graph (cached outside the repo)…", err=True)
     graph = build_graph(root, config=load_config(root))
     save_graph(graph, cache_path)
     return graph
