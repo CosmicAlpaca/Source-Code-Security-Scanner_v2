@@ -36,6 +36,7 @@ class _Index:
         self.defs_by_file: dict[str, dict[str, str]] = defaultdict(dict)  # file -> name -> node_id
         self.global_defs: dict[str, list[str]] = defaultdict(list)  # name -> [node_id]
         self.imports_by_file: dict[str, dict[str, tuple[str, str]]] = defaultdict(dict)
+        self.instances_by_file: dict[str, dict[str, str]] = defaultdict(dict)  # file -> var -> class
         for facts in all_facts:
             for d in facts.defs:
                 node_id = function_id(facts.file, d.name)
@@ -43,6 +44,7 @@ class _Index:
                 self.global_defs[d.name].append(node_id)
             for imp in facts.imports:
                 self.imports_by_file[facts.file][imp.local_name] = (imp.source, imp.imported_name)
+            self.instances_by_file[facts.file].update(getattr(facts, "instantiations", {}))
 
 
 def _resolve_via_imports(name: str, call_object: str | None, facts: FileFacts, index: _Index):
@@ -63,6 +65,20 @@ def _resolve_via_imports(name: str, call_object: str | None, facts: FileFacts, i
     return None
 
 
+def _resolve_via_receiver(method: str, receiver: str | None, facts: FileFacts, index: _Index):
+    """`obj.method` where `obj = new Class()` -> the method def on Class (same or imported file)."""
+    cls = index.instances_by_file[facts.file].get(receiver) if receiver else None
+    if not cls:
+        return None
+    if cls in index.defs_by_file[facts.file]:
+        cls_file = facts.file
+    else:
+        source_imp = index.imports_by_file[facts.file].get(cls)
+        extractor = extractor_for(facts.file)
+        cls_file = extractor.resolve_module(source_imp[0], facts.file, index.files) if source_imp and extractor else None
+    return index.defs_by_file[cls_file].get(method) if cls_file else None
+
+
 def _resolve_callee(name: str, call_object: str | None, facts: FileFacts, index: _Index):
     """Returns (targets, confidence) — empty targets if unresolved/ambiguous."""
     same_file = index.defs_by_file[facts.file].get(name)
@@ -71,6 +87,9 @@ def _resolve_callee(name: str, call_object: str | None, facts: FileFacts, index:
     via_import = _resolve_via_imports(name, call_object, facts, index)
     if via_import:
         return [via_import], RESOLVED
+    via_receiver = _resolve_via_receiver(name, call_object, facts, index)
+    if via_receiver:
+        return [via_receiver], RESOLVED
     candidates = index.global_defs.get(name, [])
     if 0 < len(candidates) <= MAX_NAME_ONLY_TARGETS:
         return list(candidates), NAME_ONLY
@@ -127,7 +146,7 @@ def resolve(all_facts: list[FileFacts]) -> tuple[list[Node], list[Edge], dict]:
             if r.handler is None:
                 continue
             rid = route_id(facts.file, r.method, r.path)
-            targets, confidence = _resolve_callee(r.handler, None, facts, index)
+            targets, confidence = _resolve_callee(r.handler, r.handler_object, facts, index)
             for dst in targets:
                 add_edge(rid, dst, HANDLES, confidence)
 
