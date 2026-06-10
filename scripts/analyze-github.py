@@ -19,6 +19,7 @@ Output files:
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -73,6 +74,24 @@ def ask(prompt: str, default: str = "") -> str:
     return Prompt.ask(prompt, default=default).strip()
 
 
+# Validate user input before it reaches git/radar subprocess calls. List-form
+# subprocess avoids shell injection, but an unchecked value starting with '-'
+# could still be parsed as an option (argument injection into git clone/checkout).
+_URL_RE = re.compile(r"^(https://|git@)[\w.@:/~-]+?(\.git)?$")
+_REF_RE = re.compile(r"^\w[\w./-]*$")  # branch / function: no leading dash, safe chars
+
+
+def validate_inputs(url: str, branch: str | None, func_name: str | None) -> None:
+    """Reject inputs that could inject arguments into subprocess calls; exit on bad."""
+    if not _URL_RE.match(url):
+        console.print(f"[red]URL khong hop le:[/] {url}")
+        sys.exit(1)
+    for label, val in (("Nhanh", branch), ("Ten ham", func_name)):
+        if val is not None and not _REF_RE.match(val):
+            console.print(f"[red]{label} chua ky tu khong an toan:[/] {val}")
+            sys.exit(1)
+
+
 # ──────────────────────────── main ────────────────────────────
 
 
@@ -116,6 +135,8 @@ def main() -> None:
             "[dim](tuy chon — Enter de bo qua)[/]"
         )
         func_name = func_raw or None
+
+    validate_inputs(url, branch, func_name)
 
     # ── paths ──
     radar_base = ["radar"] if shutil.which("radar") else ["python", "-m", "radar"]
@@ -172,20 +193,21 @@ def main() -> None:
 
     if func_name:
         console.print(f"   [dim]Truy vet ham: {func_name}[/]")
+        # func_name is validated by validate_inputs() above; list-form, no shell.
         # terminal tree
         subprocess.run(
-            radar_base + ["impact", "--function", func_name, "--path", "."],
+            radar_base + ["impact", "--function", func_name, "--path", "."],  # nosemgrep: dangerous-subprocess-use-tainted-env-args
             cwd=repo_dir, check=False,
         )
         # HTML
         with open(impact_html, "w", encoding="utf-8") as fh:
             subprocess.run(
-                radar_base + ["impact", "--function", func_name, "--path", ".", "--format", "html"],
+                radar_base + ["impact", "--function", func_name, "--path", ".", "--format", "html"],  # nosemgrep: dangerous-subprocess-use-tainted-env-args
                 cwd=repo_dir, stdout=fh, check=False,
             )
         # Mermaid Markdown
         mermaid_proc = subprocess.run(
-            radar_base + ["impact", "--function", func_name, "--path", ".", "--format", "mermaid"],
+            radar_base + ["impact", "--function", func_name, "--path", ".", "--format", "mermaid"],  # nosemgrep: dangerous-subprocess-use-tainted-env-args
             cwd=repo_dir, capture_output=True, text=True, check=False,
         )
         impact_md.write_text(f"```mermaid\n{mermaid_proc.stdout}\n```", encoding="utf-8")
