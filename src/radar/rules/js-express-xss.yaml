@@ -17,3 +17,7 @@ rules:
     pattern-sinks:
       - pattern: $RES.send(...)
       - pattern: $RES.write(...)
+    metadata:
+      category: security
+      cwe: "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      owasp: "A03:2021 - Injection"
