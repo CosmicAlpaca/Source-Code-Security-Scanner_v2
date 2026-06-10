@@ -2,6 +2,22 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
+## [0.3.0] — 2026-06-10
+
+Impact graph chạy được trên Express app thật (handler-object pattern), phát hiện qua live test OWASP NodeGoat.
+
+### Added
+
+- **`feat(impact)` — handler-object route→handler**: resolve `app.METHOD(path, instance.method)` với
+  `const instance = new Class()` → cạnh `handles` route→method def (cùng/khác file qua import), confidence `resolved`.
+- **`new Class()` → cạnh `calls`** tới class → constructor/handler-class có dependent (blast radius khác rỗng).
+- Receiver→class resolution dùng chung cho cả method call `obj.m()` lẫn route handler.
+- Fixture `tests/fixtures/express-handler-object/` + 3 test regression.
+
+### Fixed
+
+- NodeGoat: `radar impact --function handleLoginRequest` **trước = 0 APIs → nay = POST /login**. Demo app không regression.
+
 ## [0.2.1] — 2026-06-10
 
 Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) DoD) + dọn nợ hygiene và sửa các finding tự-quét.
