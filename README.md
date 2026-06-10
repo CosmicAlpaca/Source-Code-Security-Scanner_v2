@@ -6,7 +6,7 @@
 
 `radar` là CLI local với 2 năng lực, dùng độc lập:
 
-1. **`radar scan`** — quét lỗ hổng bằng [Semgrep](https://semgrep.dev) (preset chuẩn ngành + 5 custom rules). Tự chạy native hoặc Docker.
+1. **`radar scan`** — quét lỗ hổng bằng [Semgrep](https://semgrep.dev) (preset chuẩn ngành + 6 custom rules). Tự chạy native hoặc Docker.
 2. **`radar impact`** — dựng function-level call graph trả lời *"sửa hàm này thì function / API / feature nào bị ảnh hưởng?"*
 
 > 🔒 **Zero-footprint** — cả hai lệnh chạy trên repo bất kỳ mà **không tạo file nào** trong repo đó: scan đọc kết quả Semgrep qua stdout; impact lưu graph cache *ngoài* repo. Bạn cũng có thể [gắn vào GitHub Actions](#phần-4--gắn-vào-ci-github-actions) để tự động hoá theo PR.
@@ -39,7 +39,7 @@ Thiếu cả hai → `radar scan` báo lỗi rõ. `radar impact` không cần Se
 Quét ngay trên máy, không cần CI, **không ghi gì** vào repo được quét:
 
 ```bash
-radar scan .                          # quét repo hiện tại (preset + 5 custom rules)
+radar scan .                          # quét repo hiện tại (preset + 6 custom rules)
 radar scan ../other-repo              # quét repo khác
 radar scan --rules-only               # offline: chỉ custom rules, bỏ preset (không cần mạng)
 radar scan --format json > out.json   # máy đọc
@@ -58,13 +58,14 @@ Output mặc định — bảng terminal gom theo severity:
 - **Mặc định không block** (exit 0) — chỉ informational. `--error` mới làm exit≠0; `--fail-on error|warning|info` chọn ngưỡng.
 - **`--rules-only`** chạy được offline (chỉ custom rules). Mặc định có thêm preset registry (`p/security-audit`, `p/secrets`, `p/owasp-top-ten`) — cần mạng lần đầu.
 
-### 5 custom rules đi kèm
+### 6 custom rules đi kèm
 
 | Rule | Bắt gì |
 |---|---|
 | `js-sql-string-concat` | SQL build bằng concat / template literal |
 | `js-hardcoded-jwt-secret` | `jwt.sign/verify` với secret literal |
 | `js-child-process-user-input` | `req.*` chảy vào `exec()` (taint mode) |
+| `js-express-xss` | `req.*` chảy vào `res.send()/write()` — XSS (taint mode, OWASP A03) |
 | `py-subprocess-shell-true` | `subprocess` + `shell=True` + chuỗi động |
 | `py-flask-debug-true` | `app.run(debug=True)` |
 

@@ -2,6 +2,29 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
+## [0.2.1] — 2026-06-10
+
+Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) DoD) + dọn nợ hygiene và sửa các finding tự-quét.
+
+### Added
+
+- **Rule `js-express-xss`** (taint mode) — `req.query/body/params` → `res.send()/write()`, XSS OWASP A03. Kèm fixture; nâng bộ custom rules **5 → 6**.
+
+### Fixed
+
+- **`fix(security)`** — `analyze-github.py` validate `url`/`branch`/`function` trước khi vào subprocess (chặn argument-injection vào `git clone/checkout`); `cache.py` đổi `sha1` → `sha256` cho cache key (clear semgrep `insecure-hash-algorithm`).
+- **`fix(ci)`** — `security-scan.yml` đưa `github.base_ref` qua biến env thay vì interpolate thẳng trong `run:` (clear `run-shell-injection`).
+- **`fix(analyze-github)`** — không ghi file impact rỗng (HTML/Mermaid) khi blast radius trống — bỏ artifact 0-byte.
+
+### Changed
+
+- **`chore`** — ngừng track `analysis_results/` (artifact sinh ra); `.gitignore` thêm `analysis_results/` + `.playwright-mcp/`.
+- **`docs(demo)`** — sửa cú pháp `analyze-github.py --url …`; cross-link `run-demo.md` (CI/app mẫu) ↔ `run-github-demo.md` (repo ngoài).
+
+### Verified (GitHub thật, repo public)
+
+- Workflow xanh 9/9 run (gồm `rule-tests` với rule mới). PR comment bot bảng findings + section impact render (PR #1). SARIF → `github-advanced-security[bot]` review comments. Blast radius engine đúng ví dụ [PRD §4 F2.6](./security-radar-prd.md) (`validateUser → login/register → Authentication`) qua `radar impact`, zero-footprint.
+
 ## [0.2.0] — 2026-06-08
 
 Biến security-radar thành **tool local hoàn chỉnh**: scan + impact chạy trên repo bất kỳ sau `pip install`, **không để lại dấu vết** lên repo đích.

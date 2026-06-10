@@ -8,12 +8,14 @@
 
 ## 1. Tổng quan
 
-**security-radar** là công cụ bảo mật mã nguồn dành cho developer, gồm 2 năng lực gắn kết trong cùng một pipeline CI:
+**security-radar** là công cụ bảo mật mã nguồn dành cho developer, gồm 2 năng lực dùng được ở **hai chế độ**: **CLI local zero-footprint** (sau `pip install`, quét repo bất kỳ không để lại dấu vết) **và** workflow CI **tuỳ chọn** gắn vào PR.
 
-1. **Security Scan** — quét lỗ hổng bảo mật tự động bằng **Semgrep** chạy trong **GitHub Actions**: mỗi PR/push được scan theo rule sets chuẩn ngành + rule tự viết, kết quả hiện ở tab Security (SARIF), comment trong PR, và report artifact.
-2. **Impact Tracing** — dựng **function-level dependency graph** (call graph) của codebase: khi có thay đổi code, trả lời ngay *"sửa function/API này thì những function nào, API nào, feature nào bị ảnh hưởng?"*
+1. **Security Scan** — quét lỗ hổng bằng **Semgrep** theo rule sets chuẩn ngành + rule tự viết. Local: `radar scan` (native→Docker). CI (tuỳ chọn): GitHub Actions trên mỗi PR/push → tab Security (SARIF), comment PR, report artifact.
+2. **Impact Tracing** — dựng **function-level dependency graph** (call graph) của codebase: khi có thay đổi code, trả lời ngay *"sửa function/API này thì những function nào, API nào, feature nào bị ảnh hưởng?"*. Local: `radar impact` (cache ngoài repo). CI: gộp blast radius vào PR comment.
 
-**One-liner:** *Mỗi PR tự động biết: code có lỗ hổng gì, và thay đổi này lan đến đâu.*
+**One-liner:** *Local biết ngay code có lỗ hổng gì và thay đổi lan đến đâu; gắn CI thì mỗi PR tự biết.*
+
+> Định vị này (local-first + CI tuỳ chọn) là kết quả M7/M8 bổ sung sau v1.0; §4–§11 giữ nguyên yêu cầu chức năng. Bản gốc v1.0 mô tả CI-centric.
 
 ### Bối cảnh
 
