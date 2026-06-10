@@ -119,6 +119,11 @@ class JavaScriptExtractor(LanguageExtractor):
                 if src:
                     parse_require_bindings(name_node, src, facts)
                     return True
+        if value.type == "new_expression" and name_node.type == "identifier":  # const x = new C()
+            ctor = value.child_by_field_name("constructor")
+            if ctor is not None and ctor.type == "identifier":
+                facts.instantiations[_text(name_node)] = _text(ctor)
+            # fall through so _on_new_expression records the constructor call
         return False
 
     def _on_pair(self, node, facts, func_stack, class_name) -> bool:
@@ -174,6 +179,17 @@ class JavaScriptExtractor(LanguageExtractor):
                 self._walk(child, facts, func_stack, class_name)
         return True
 
+    def _on_new_expression(self, node, facts, func_stack, class_name) -> bool:
+        ctor = node.child_by_field_name("constructor")
+        if ctor is not None and ctor.type == "identifier":  # `new SessionHandler(db)` -> call to class
+            caller = func_stack[-1] if func_stack else None
+            facts.calls.append(CallSite(caller, _text(ctor), node.start_point[0] + 1))
+        args = node.child_by_field_name("arguments")
+        if args is not None:
+            for child in args.children:
+                self._walk(child, facts, func_stack, class_name)
+        return True
+
     def _maybe_route(self, fn, args, facts, func_stack, class_name, line) -> bool:
         obj, prop = fn.child_by_field_name("object"), fn.child_by_field_name("property")
         if obj is None or prop is None or obj.type != "identifier":
@@ -188,6 +204,12 @@ class JavaScriptExtractor(LanguageExtractor):
         for handler_node in arg_nodes[1:]:
             if handler_node.type == "identifier":
                 facts.routes.append(RouteDef(method, path, _text(handler_node), line))
+            elif handler_node.type == "member_expression":
+                h_prop = handler_node.child_by_field_name("property")
+                h_obj = handler_node.child_by_field_name("object")
+                if h_prop is not None and h_prop.type == "property_identifier":
+                    h_obj_name = _text(h_obj) if h_obj is not None and h_obj.type == "identifier" else None
+                    facts.routes.append(RouteDef(method, path, _text(h_prop), line, handler_object=h_obj_name))
             elif handler_node.type in _FUNC_VALUE_TYPES:
                 synthetic = f"<route {method} {path}>"
                 self._add_def(synthetic, handler_node, facts, func_stack)

@@ -177,8 +177,9 @@ Thêm ngôn ngữ = thêm **1 file plugin** trong `src/radar/graph/languages/` (
 
 ## Giới hạn (by design)
 
-- Call graph là **xấp xỉ**: same-file → import map → khớp tên toàn cục (nhãn `⚠ approx`). Dynamic call (`obj[x]()`) bỏ qua — fallback edge import file-level.
-- Không type-aware, không dynamic dispatch.
+- Call graph là **xấp xỉ**: same-file → import map → receiver `new Class()` → khớp tên toàn cục (nhãn `⚠ approx`). Dynamic call (`obj[x]()`) bỏ qua — fallback edge import file-level.
+- **Hỗ trợ** handler-object kiểu Express/NodeGoat: `app.post(path, instance.method)` + `const instance = new Class()` → nối route→handler và `new`→class.
+- **Còn bỏ sót** (xấp xỉ/None): handler từ DI container, factory trả handler động, `app[method]()` dynamic dispatch, receiver gán lại nhiều lần. Không type-aware.
 
 ## Development
 
