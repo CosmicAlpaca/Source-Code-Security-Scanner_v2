@@ -2,6 +2,8 @@
 
 > ⚠️ `demo/app/` là ứng dụng **cố ý chứa lỗ hổng** (SQLi, command injection, hardcoded JWT secret) để demo security-radar. **Không bao giờ deploy.**
 
+> 📎 Demo này = pipeline **CI trên app mẫu** (PR → comment findings + impact, SARIF lên tab Security). Muốn quét **repo GitHub ngoài bất kỳ** bằng script local → xem [`run-github-demo.md`](run-github-demo.md).
+
 ## Chuẩn bị (1 lần)
 
 1. Repo đã push lên GitHub (**public** — Code Scanning free) với workflow `.github/workflows/security-scan.yml`.

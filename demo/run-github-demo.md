@@ -2,6 +2,8 @@
 
 Tài liệu này hướng dẫn cách sử dụng script `analyze-github.py` để quét tự động lỗ hổng bảo mật (OWASP Top 10) và vẽ bản đồ ảnh hưởng (Impact Graph) trên **bất kỳ repository GitHub nào**. Đây là phần minh họa cho tính năng phân tích độc lập (Zero-footprint) mà không cần can thiệp trực tiếp vào mã nguồn của dự án đang chạy.
 
+> 📎 Demo này = phân tích **repo ngoài** qua script. Muốn demo pipeline CI (PR comment + SARIF tab Security) trên app mẫu có sẵn → xem [`run-demo.md`](run-demo.md).
+
 ## 1. Mục đích
 
 - **Xác định lỗ hổng (Security Scan)**: Chạy công cụ quét với bộ rules `p/owasp-top-ten` (các lỗ hổng phổ biến nhất) và các rule tự định nghĩa (ví dụ: hardcoded JWT, SQL injection) trên thư mục được clone về.
@@ -21,14 +23,14 @@ Script chạy nằm tại thư mục `scripts/analyze-github.py`.
 ### Cú pháp:
 
 ```bash
-python scripts/analyze-github.py <GITHUB_URL> [--branch <BRANCH>] [--function <FUNCTION_NAME>]
+python scripts/analyze-github.py --url <GITHUB_URL> [--branch <BRANCH>] [--function <FUNCTION_NAME>]
 ```
 
 ### Kịch bản 1: Phân tích Impact của một nhánh (Diff Branch)
 Giả sử bạn muốn xem nhánh `feature/new-api` của một repo đã thay đổi những gì và ảnh hưởng đến đâu:
 
 ```bash
-python scripts/analyze-github.py https://github.com/username/project.git --branch feature/new-api
+python scripts/analyze-github.py --url https://github.com/username/project.git --branch feature/new-api
 ```
 **Kết quả dự kiến:**
 1. **Security Scan**: Quét nhánh `feature/new-api` và xuất danh sách lỗ hổng OWASP nếu có.
@@ -38,7 +40,7 @@ python scripts/analyze-github.py https://github.com/username/project.git --branc
 Giả sử bạn biết một hàm cốt lõi (ví dụ `validateUser`) vừa được sửa và muốn xem nó lan truyền đến những API endpoint nào:
 
 ```bash
-python scripts/analyze-github.py https://github.com/username/project.git --function validateUser
+python scripts/analyze-github.py --url https://github.com/username/project.git --function validateUser
 ```
 **Kết quả dự kiến:**
 1. **Security Scan**: Liệt kê các cảnh báo bảo mật.
