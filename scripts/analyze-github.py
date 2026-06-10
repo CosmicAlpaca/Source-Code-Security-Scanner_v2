@@ -92,6 +92,20 @@ def validate_inputs(url: str, branch: str | None, func_name: str | None) -> None
             sys.exit(1)
 
 
+def impact_to_file(cmd: list[str], cwd: Path, out: Path, label: str, wrap=None) -> None:
+    """Run an impact command; write `out` only if it produced output (no empty files).
+
+    cmd carries user input (func_name/branch) already checked by validate_inputs();
+    list-form subprocess, no shell.
+    """
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)  # nosemgrep: dangerous-subprocess-use-tainted-env-args
+    if not proc.stdout.strip():
+        console.print(f"   [yellow]Khong co anh huong — bo qua {label}[/]")
+        return
+    out.write_text(wrap(proc.stdout) if wrap else proc.stdout, encoding="utf-8")
+    console.print(f"   [green]{label}:[/] [cyan]{out}[/]")
+
+
 # ──────────────────────────── main ────────────────────────────
 
 
@@ -193,27 +207,14 @@ def main() -> None:
 
     if func_name:
         console.print(f"   [dim]Truy vet ham: {func_name}[/]")
-        # func_name is validated by validate_inputs() above; list-form, no shell.
-        # terminal tree
-        subprocess.run(
-            radar_base + ["impact", "--function", func_name, "--path", "."],  # nosemgrep: dangerous-subprocess-use-tainted-env-args
-            cwd=repo_dir, check=False,
+        base = radar_base + ["impact", "--function", func_name, "--path", "."]
+        # terminal tree (func_name validated by validate_inputs() above; no shell)
+        subprocess.run(base, cwd=repo_dir, check=False)  # nosemgrep: dangerous-subprocess-use-tainted-env-args
+        impact_to_file(base + ["--format", "html"], repo_dir, impact_html, "HTML")
+        impact_to_file(
+            base + ["--format", "mermaid"], repo_dir, impact_md, "Mermaid MD",
+            wrap=lambda s: f"```mermaid\n{s}\n```",
         )
-        # HTML
-        with open(impact_html, "w", encoding="utf-8") as fh:
-            subprocess.run(
-                radar_base + ["impact", "--function", func_name, "--path", ".", "--format", "html"],  # nosemgrep: dangerous-subprocess-use-tainted-env-args
-                cwd=repo_dir, stdout=fh, check=False,
-            )
-        # Mermaid Markdown
-        mermaid_proc = subprocess.run(
-            radar_base + ["impact", "--function", func_name, "--path", ".", "--format", "mermaid"],  # nosemgrep: dangerous-subprocess-use-tainted-env-args
-            cwd=repo_dir, capture_output=True, text=True, check=False,
-        )
-        impact_md.write_text(f"```mermaid\n{mermaid_proc.stdout}\n```", encoding="utf-8")
-
-        console.print(f"   [green]HTML:[/] [cyan]{impact_html}[/]")
-        console.print(f"   [green]Mermaid MD:[/] [cyan]{impact_md}[/]")
 
     elif branch:
         console.print(f"   [dim]Diff nhanh '{branch}' vs origin/main...[/]")
@@ -224,16 +225,9 @@ def main() -> None:
         except SystemExit:
             diff_target = "HEAD~1"
 
-        subprocess.run(
-            radar_base + ["impact", "--diff", diff_target, "--path", "."],
-            cwd=repo_dir, check=False,
-        )
-        with open(impact_html, "w", encoding="utf-8") as fh:
-            subprocess.run(
-                radar_base + ["impact", "--diff", diff_target, "--path", ".", "--format", "html"],
-                cwd=repo_dir, stdout=fh, check=False,
-            )
-        console.print(f"   [green]HTML:[/] [cyan]{impact_html}[/]")
+        base = radar_base + ["impact", "--diff", diff_target, "--path", "."]
+        subprocess.run(base, cwd=repo_dir, check=False)
+        impact_to_file(base + ["--format", "html"], repo_dir, impact_html, "HTML")
 
     else:
         console.print("   [dim]Khong co branch/func — chi build graph tong quan...[/]")
