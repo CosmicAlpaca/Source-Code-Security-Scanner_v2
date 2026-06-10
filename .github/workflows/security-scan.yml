@@ -68,10 +68,12 @@ jobs:
       - name: Install radar
         run: pip install .
       - name: Build graph + trace impact
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           radar build .
-          radar impact --diff "origin/${{ github.base_ref }}...HEAD" --format json > impact.json
-          radar impact --diff "origin/${{ github.base_ref }}...HEAD" --format html > impact.html
+          radar impact --diff "origin/${BASE_REF}...HEAD" --format json > impact.json
+          radar impact --diff "origin/${BASE_REF}...HEAD" --format html > impact.html
       - uses: actions/upload-artifact@v4
         with:
           name: impact-report

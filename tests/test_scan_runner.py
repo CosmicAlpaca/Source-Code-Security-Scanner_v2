@@ -12,7 +12,11 @@ def test_rules_dir_bundled():
     rd = runner.rules_dir()
     assert rd.is_dir()
     yamls = list(rd.glob("*.yaml"))
-    assert len(yamls) == 5  # the 5 custom rules travel with the package
+    assert len(yamls) == 6  # the custom rules travel with the package (incl. js-express-xss)
+    # every rule ships with a code fixture (.js/.py) next to it for `semgrep --test`
+    for y in yamls:
+        fixtures = [p for p in rd.glob(f"{y.stem}.*") if p.suffix != ".yaml"]
+        assert fixtures, f"no fixture for {y.name}"
 
 
 def test_detect_runtime_prefers_native(monkeypatch):
