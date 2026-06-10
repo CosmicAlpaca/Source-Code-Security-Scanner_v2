@@ -15,6 +15,7 @@ Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) D
 - **`fix(security)`** — `analyze-github.py` validate `url`/`branch`/`function` trước khi vào subprocess (chặn argument-injection vào `git clone/checkout`); `cache.py` đổi `sha1` → `sha256` cho cache key (clear semgrep `insecure-hash-algorithm`).
 - **`fix(ci)`** — `security-scan.yml` đưa `github.base_ref` qua biến env thay vì interpolate thẳng trong `run:` (clear `run-shell-injection`).
 - **`fix(analyze-github)`** — không ghi file impact rỗng (HTML/Mermaid) khi blast radius trống — bỏ artifact 0-byte.
+- **`fix(impact)`** — `--format json/html/mermaid` giữ stdout sạch: hàm không tồn tại → xuất doc rỗng hợp lệ (không plain text); thông báo "building graph" chuyển sang stderr. Phát hiện qua live test NodeGoat.
 
 ### Changed
 
