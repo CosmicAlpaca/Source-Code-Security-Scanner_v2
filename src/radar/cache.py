@@ -21,6 +21,10 @@ def cache_root() -> Path:
 
 
 def graph_cache_path(root: Path) -> Path:
-    """Deterministic cache file for a repo, outside that repo."""
-    key = hashlib.sha1(str(root.resolve()).encode("utf-8")).hexdigest()[:16]
+    """Deterministic cache file for a repo, outside that repo.
+
+    The hash is only a filesystem key (not a security boundary); SHA-256 is used
+    so static scanners don't flag the weaker SHA-1.
+    """
+    key = hashlib.sha256(str(root.resolve()).encode("utf-8")).hexdigest()[:16]
     return cache_root() / key / "graph.json"
