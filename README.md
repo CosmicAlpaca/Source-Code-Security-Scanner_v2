@@ -2,7 +2,7 @@
 
 > Một tool. Cài 1 lần, quét **lỗ hổng bảo mật** và truy **blast radius** trên repo bất kỳ — **không để lại dấu vết** lên repo đó.
 
-[![Security Scan](../../actions/workflows/security-scan.yml/badge.svg)](../../actions/workflows/security-scan.yml)
+[![Security Scan](https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2/actions/workflows/security-scan.yml/badge.svg)](https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2/actions/workflows/security-scan.yml)
 
 `radar` là CLI local với 2 năng lực, dùng độc lập:
 
@@ -189,14 +189,44 @@ Impact graph hỗ trợ **4 ngôn ngữ** out-of-the-box:
 | Go | `.go` | `net/http` (`HandleFunc`), gorilla/mux (`.Get/.Post/…`) |
 | Java | `.java` | Spring MVC (`@GetMapping`, `@RequestMapping`), JAX-RS (`@GET` + `@Path`) |
 
-Go và Java cần cài thêm parser (tự động bỏ qua nếu thiếu — không lỗi):
+Go và Java parser được cài tự động khi `pip install .` trên Python ≥ 3.11. Nếu bạn đang dùng Python cũ hơn hoặc muốn cài thủ công:
 ```bash
-pip install "security-radar[go,java]"
-# hoặc thủ công:
 pip install tree-sitter-go tree-sitter-java
+# hoặc qua extras:
+pip install "security-radar[go,java]"
 ```
 
+Cả hai plugin **graceful degrade** — nếu parser chưa có thì tự bỏ qua, không crash, chỉ không parse file `.go`/`.java`.
+
 Thêm ngôn ngữ mới = thêm **1 file plugin** trong `src/radar/graph/languages/` (subclass `LanguageExtractor`), registry tự phát hiện — không sửa core. Xem `python.py` làm mẫu.
+
+## Stack công nghệ
+
+| Thành phần | Thư viện / Tool | Ghi chú |
+|---|---|---|
+| Static analysis engine | [Semgrep](https://semgrep.dev) | Dùng taint mode để trace data flow source → sink |
+| Custom OWASP rules | YAML (Semgrep DSL) | 13 rules tự viết, đóng gói trong package |
+| AST parser | [tree-sitter](https://tree-sitter.github.io) + bindings JS/TS/Python/Go/Java | Parse codebase thành AST, tự viết extractor cho từng ngôn ngữ |
+| Call graph | [NetworkX](https://networkx.org) `DiGraph` | Lưu function calls + imports; reverse BFS để tính blast radius |
+| CLI | [Click](https://click.palletsprojects.com) | Subcommands `radar scan / impact / build` |
+| Terminal output | [Rich](https://rich.readthedocs.io) | Bảng màu, tree view |
+| HTML report | [Jinja2](https://jinja.palletsprojects.com) + Mermaid.js | Template `.j2`, diagram render phía client |
+| Testing | pytest + Semgrep `--test` | 103 unit tests; rule fixtures với `// ruleid:` / `ok:` |
+
+> Phần **scan** dùng Semgrep làm engine, mình viết rules. Phần **call graph** tự build từ đầu bằng tree-sitter (parse AST) và NetworkX (lưu graph + BFS).
+
+## Validation thực tế
+
+Đã chạy `radar scan --rules-only` trên [OWASP/NodeGoat](https://github.com/OWASP/NodeGoat) — ứng dụng Node.js cố ý chứa lỗ hổng:
+
+| Kết quả | Chi tiết |
+|---|---|
+| **8 findings** (5 ERROR · 3 WARNING) | eval injection A08, SSRF A10, XSS A03, NoSQL injection, open redirect A01, plaintext password A07, session fixation A07, ReDoS A05 |
+| **Coverage** | 5/8 lỗ hổng intentional của NodeGoat bị bắt bởi custom rules |
+| **Impact graph** | Trace đúng `validateLogin → handleLoginRequest`, `searchCriteria → displayAllocations` |
+| **True negatives** | `js-sql-string-concat` không false-positive trên MongoDB |
+
+Gap còn lại (NoSQL injection, open redirect, ReDoS) nằm trong [roadmap](docs/development-roadmap.md).
 
 ## Giới hạn (by design)
 
