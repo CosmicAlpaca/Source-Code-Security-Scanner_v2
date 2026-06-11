@@ -71,6 +71,30 @@ Output mặc định — bảng terminal gom theo severity:
 
 Rules đóng gói trong package (`src/radar/rules/`) nên đi theo `pip install`. Mỗi rule có fixture test (`// ruleid:` / `ok:`); thêm rule mới = 1 cặp `.yaml` + fixture trong `src/radar/rules/`.
 
+### `radar triage` — AI triage findings theo reachability (opt-in)
+
+Mỗi finding Semgrep được AI đọc *cùng ngữ cảnh reachability từ impact graph* (route nào chạm tới đoạn code đó) → phân loại **khai thác được vs false-positive** và xếp ưu tiên. Đây là **lớp phụ**: không đổi output của `radar scan`, SARIF hay exit code; chỉ thêm cột verdict.
+
+```bash
+radar triage .                    # triage finding ≥ WARNING (mặc định)
+radar triage . --all              # triage mọi finding kể cả INFO
+radar triage . --dry-run          # IN CHÍNH XÁC payload sẽ gửi — không gọi API
+radar triage . --format json      # máy đọc: mỗi finding thêm block "ai" + "reachability"
+radar triage . --force            # bỏ qua cache verdict, hỏi lại model
+```
+
+```
+Sev  Location            Rule    Reach           AI verdict          Why
+🔴   session.js:5        xss     reachable ←1    exploitable 0.90    reachable từ POST /login, req.body tới res.send
+🟡   utils.js:42         xss     unknown         unlikely 0.30       không thấy route nào tới hàm này
+```
+
+> 🔐 **Opt-in & privacy** — chỉ chạy khi bạn gõ `radar triage`. Mỗi finding gửi **snippet quanh dòng lỗi** (không gửi cả repo), đã **che secret** trước khi đi. `--dry-run` cho xem payload trước. Verdict cache *ngoài repo* nên chạy lại = cùng kết quả, **0 call thừa**.
+>
+> ⚠️ **Reachability là best-effort**: `reachable` chắc chắn có route untrusted tới; `unknown` **không** đồng nghĩa code chết (graph có thể miss dynamic dispatch) — AI được dặn không hạ severity chỉ vì `unknown`.
+>
+> **Cấu hình** (env hoặc `.env` ở gốc repo — xem `.env.example`): `OPENAI_API_KEY` (bắt buộc), `RADAR_AI_MODEL` (mặc định `gpt-4o-mini`, đổi `gpt-4o` cho độ chính xác cao hơn), `OPENAI_BASE_URL` (đổi sang Azure/proxy/Ollama OpenAI-compatible). `.env` đã được `.gitignore`.
+
 ---
 
 ## Phần 3 — `radar impact`: blast radius
