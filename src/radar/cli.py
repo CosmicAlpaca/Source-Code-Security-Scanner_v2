@@ -133,6 +133,52 @@ def scan(path, rules_only, extra, output_format, gate, fail_on) -> None:
         sys.exit(1)
 
 
+@main.command()
+@click.argument("path", type=click.Path(exists=True, file_okay=False), default=".")
+@click.option("--floor", type=click.Choice(["error", "warning", "info"]), default="warning",
+              help="Only triage findings at/above this severity (default: warning)")
+@click.option("--all", "only_all", is_flag=True, help="Triage every finding (ignore --floor)")
+@click.option("--dry-run", is_flag=True, help="Print exactly what would be sent; make no API calls")
+@click.option("--force", is_flag=True, help="Ignore cached verdicts and re-query the model")
+@click.option("--rules-only", is_flag=True, help="Skip registry presets — only bundled custom rules")
+@click.option("--config", "extra", multiple=True, help="Extra semgrep --config (repeatable)")
+@click.option("--format", "output_format", type=click.Choice(["terminal", "json"]),
+              default="terminal", help="Output format")
+def triage(path, floor, only_all, dry_run, force, rules_only, extra, output_format) -> None:
+    """AI-triage Semgrep findings with impact-graph reachability.
+
+    Opt-in: sends a redacted code snippet per finding to OpenAI. Never alters
+    `radar scan` output — this is an additive verdict layer. Needs OPENAI_API_KEY
+    (env or a repo-root .env). Use --dry-run to preview exactly what would be sent.
+    """
+    from radar.scan.runner import ScanError
+    from radar.triage import engine, render
+    from radar.triage.llm_client import TriageError
+
+    root = Path(path).resolve()
+    try:
+        results, calls = engine.triage(
+            root, rules_only=rules_only, extra_config=list(extra), floor=floor,
+            only_all=only_all, force=force, dry_run=dry_run,
+            emit=(lambda m: console.print(m, highlight=False)) if dry_run else None,
+        )
+    except ScanError as exc:
+        console.print(f"[red]scan failed:[/] {exc}")
+        sys.exit(2)
+    except TriageError as exc:
+        console.print(f"[red]triage unavailable:[/] {exc}")
+        sys.exit(2)
+
+    if dry_run:
+        console.print(f"[dim]dry-run: {len(results)} finding(s) prepared, 0 API calls.[/]")
+        return
+    if output_format == "json":
+        click.echo(render.to_json_triage(results))
+    else:
+        render.render_terminal_triage(results, console)
+        console.print(f"[dim]{calls} API call(s) this run; the rest served from cache.[/]")
+
+
 def _load_or_build_graph(root: Path, graph_override: Path | None = None):
     """Resolve a graph without writing into the target repo.
 

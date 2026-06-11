@@ -19,8 +19,9 @@ M1→M7 done. **M8 (verify CI trên GitHub thật)** done — Definition of Done
 | M6 — Đóng gói demo | Exporters + impact-in-CI + demo app + README | ✅ Done (local) |
 | M7 — Local scan tool | `radar scan` (native→docker) + bundled rules + impact zero-footprint | ✅ Done |
 | M8 — Verify CI GitHub | DoD §8 trên repo public: workflow xanh, PR comment, SARIF, blast radius | ✅ Done |
+| M9 — AI triage (reachability) | `radar triage`: AI phân loại exploitable vs FP, dùng reachability từ impact graph; opt-in, additive | ✅ Done |
 
-103 pytest + `semgrep --test` xanh trên máy; CI xanh 9/9 run trên GitHub.
+125 pytest + `semgrep --test` xanh trên máy; CI xanh 9/9 run trên GitHub. M9 vượt scope ban đầu — nâng signal-to-noise của scan (không tăng sức dò lỗ).
 
 ## Đã verify (2026-06-10, repo public)
 
