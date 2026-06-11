@@ -2,22 +2,6 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
-## [0.3.0] — 2026-06-10
-
-Impact graph chạy được trên Express app thật (handler-object pattern), phát hiện qua live test OWASP NodeGoat.
-
-### Added
-
-- **`feat(impact)` — handler-object route→handler**: resolve `app.METHOD(path, instance.method)` với
-  `const instance = new Class()` → cạnh `handles` route→method def (cùng/khác file qua import), confidence `resolved`.
-- **`new Class()` → cạnh `calls`** tới class → constructor/handler-class có dependent (blast radius khác rỗng).
-- Receiver→class resolution dùng chung cho cả method call `obj.m()` lẫn route handler.
-- Fixture `tests/fixtures/express-handler-object/` + 3 test regression.
-
-### Fixed
-
-- NodeGoat: `radar impact --function handleLoginRequest` **trước = 0 APIs → nay = POST /login**. Demo app không regression.
-
 ## [0.2.1] — 2026-06-10
 
 Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) DoD) + dọn nợ hygiene và sửa các finding tự-quét.
@@ -31,7 +15,6 @@ Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) D
 - **`fix(security)`** — `analyze-github.py` validate `url`/`branch`/`function` trước khi vào subprocess (chặn argument-injection vào `git clone/checkout`); `cache.py` đổi `sha1` → `sha256` cho cache key (clear semgrep `insecure-hash-algorithm`).
 - **`fix(ci)`** — `security-scan.yml` đưa `github.base_ref` qua biến env thay vì interpolate thẳng trong `run:` (clear `run-shell-injection`).
 - **`fix(analyze-github)`** — không ghi file impact rỗng (HTML/Mermaid) khi blast radius trống — bỏ artifact 0-byte.
-- **`fix(impact)`** — `--format json/html/mermaid` giữ stdout sạch: hàm không tồn tại → xuất doc rỗng hợp lệ (không plain text); thông báo "building graph" chuyển sang stderr. Phát hiện qua live test NodeGoat.
 
 ### Changed
 

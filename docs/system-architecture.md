@@ -68,10 +68,8 @@ Node id luôn dùng posix path: `"<relpath>::<name>"`.
 3. **Resolve 2-pass** (`resolver.py`), thứ tự ưu tiên mỗi call site (first hit wins):
    - cùng file → `resolved`
    - import map (named import, hoặc member call trên module đã import) → `resolved`
-   - **receiver → class**: `obj.method` với `const obj = new Class()` → method def trên `Class` (cùng file hoặc qua import) → `resolved`. Áp cho cả call `obj.m()` lẫn route handler `app.post(p, obj.method)`.
    - global name index → `name-only` (cap `MAX_NAME_ONLY_TARGETS = 5`; vượt thì bỏ, ghi `ambiguous_skipped`)
    - dynamic call bỏ qua; fallback là file-level `imports` edge.
-   - `new Class()` tạo edge `calls` tới class (constructor có dependent). Route `app.METHOD(path, obj.method)` tạo edge `handles` route→method (pattern handler-object kiểu Express/NodeGoat).
 4. **Gán feature** theo `radar.config.yml`, ghi `graph.json` (sorted).
 
 ## 5. Data flow — `radar impact`

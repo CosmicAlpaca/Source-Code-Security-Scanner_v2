@@ -1,0 +1,28 @@
+rules:
+  - id: py-ssrf-user-input
+    languages:
+      - python
+    message: >-
+      Server-Side Request Forgery (SSRF): user-controlled input flows into an HTTP
+      request. An attacker can make the server fetch arbitrary internal URLs.
+      Validate and allowlist URLs before use.
+    severity: ERROR
+    mode: taint
+    pattern-sources:
+      - pattern: request.args.get(...)
+      - pattern: request.args[...]
+      - pattern: request.form.get(...)
+      - pattern: request.form[...]
+      - pattern: request.json.get(...)
+      - pattern: request.json[...]
+    pattern-sinks:
+      - pattern: requests.get(...)
+      - pattern: requests.post(...)
+      - pattern: requests.request(...)
+      - pattern: urllib.request.urlopen(...)
+      - pattern: httpx.get(...)
+      - pattern: httpx.post(...)
+    metadata:
+      category: security
+      cwe: "CWE-918: Server-Side Request Forgery (SSRF)"
+      owasp: "A10:2021 - Server-Side Request Forgery (SSRF)"

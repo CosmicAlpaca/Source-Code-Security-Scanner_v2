@@ -1,0 +1,33 @@
+rules:
+  - id: py-pickle-loads
+    languages:
+      - python
+    message: >-
+      Insecure Deserialization: pickle.loads() on untrusted data can lead to
+      Remote Code Execution. Never deserialize pickle data from untrusted sources.
+      Use JSON or another safe format instead.
+    severity: ERROR
+    patterns:
+      - pattern: pickle.loads(...)
+    metadata:
+      category: security
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+
+  - id: py-yaml-unsafe-load
+    languages:
+      - python
+    message: >-
+      Insecure Deserialization: yaml.load() without an explicit safe Loader can
+      execute arbitrary Python code. Use yaml.safe_load() or pass
+      Loader=yaml.SafeLoader explicitly.
+    severity: ERROR
+    patterns:
+      - pattern: yaml.load(...)
+      - pattern-not: yaml.load(..., Loader=yaml.SafeLoader)
+      - pattern-not: yaml.load(..., Loader=yaml.FullLoader)
+      - pattern-not: yaml.load(..., Loader=yaml.BaseLoader)
+    metadata:
+      category: security
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A08:2021 - Software and Data Integrity Failures"

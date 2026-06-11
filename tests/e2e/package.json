@@ -1,0 +1,12 @@
+{
+  "name": "security-radar-e2e",
+  "version": "1.0.0",
+  "description": "Playwright e2e tests for HTML impact report",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  }
+}
