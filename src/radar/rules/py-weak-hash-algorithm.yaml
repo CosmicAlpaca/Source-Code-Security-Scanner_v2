@@ -1,0 +1,17 @@
+rules:
+  - id: py-weak-hash-algorithm
+    patterns:
+      - pattern: hashlib.$FUNC(...)
+      - metavariable-regex:
+          metavariable: $FUNC
+          regex: ^(md5|sha1)$
+    message: >
+      Weak hash algorithm '$FUNC' detected. MD5 and SHA1 are cryptographically
+      broken — do not use for passwords, MACs, or integrity checks. Use
+      hashlib.sha256() or hashlib.sha3_256() instead.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      owasp: "A02:2021 - Cryptographic Failures"
