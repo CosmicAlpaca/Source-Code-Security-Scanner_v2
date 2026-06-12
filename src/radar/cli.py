@@ -142,7 +142,7 @@ def _load_or_build_graph(root: Path, graph_override: Path | None = None):
     """
     from radar.cache import graph_cache_path
     from radar.config import load_config
-    from radar.graph.builder import build_graph, git_head, load_graph, save_graph
+    from radar.graph.builder import GRAPH_VERSION, build_graph, git_head, load_graph, save_graph
 
     if graph_override is not None:
         return load_graph(graph_override)
@@ -153,7 +153,14 @@ def _load_or_build_graph(root: Path, graph_override: Path | None = None):
         if not path.is_file():
             return None
         graph = load_graph(path)
-        if graph.graph.get("head") and graph.graph["head"] == head:
+        # Fresh requires BOTH the repo HEAD and the builder version to match — a
+        # cache built by an older radar (different graph shape) is stale even if
+        # the target repo is unchanged.
+        if (
+            graph.graph.get("head")
+            and graph.graph["head"] == head
+            and graph.graph.get("version") == GRAPH_VERSION
+        ):
             return graph
         return None
 
