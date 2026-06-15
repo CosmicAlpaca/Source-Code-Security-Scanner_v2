@@ -98,11 +98,12 @@ def impact_to_file(cmd: list[str], cwd: Path, out: Path, label: str, wrap=None) 
     cmd carries user input (func_name/branch) already checked by validate_inputs();
     list-form subprocess, no shell.
     """
-    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)  # nosemgrep: dangerous-subprocess-use-tainted-env-args
-    if not proc.stdout.strip():
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)  # nosemgrep: dangerous-subprocess-use-tainted-env-args
+    stdout = proc.stdout or ""
+    if not stdout.strip():
         console.print(f"   [yellow]Khong co anh huong — bo qua {label}[/]")
         return
-    out.write_text(wrap(proc.stdout) if wrap else proc.stdout, encoding="utf-8")
+    out.write_text(wrap(stdout) if wrap else stdout, encoding="utf-8")
     console.print(f"   [green]{label}:[/] [cyan]{out}[/]")
 
 
