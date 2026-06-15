@@ -1,0 +1,26 @@
+rules:
+  - id: js-path-traversal
+    languages:
+      - javascript
+      - typescript
+    message: >-
+      Path Traversal: user-controlled input flows into a file system operation.
+      An attacker can read or write arbitrary files using '../' sequences.
+      Sanitize with path.basename() or validate against an allowed directory.
+    severity: ERROR
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.query
+      - pattern: $REQ.body
+      - pattern: $REQ.params
+    pattern-sinks:
+      - pattern: fs.readFile(...)
+      - pattern: fs.readFileSync(...)
+      - pattern: fs.writeFile(...)
+      - pattern: fs.writeFileSync(...)
+      - pattern: fs.createReadStream(...)
+      - pattern: fs.createWriteStream(...)
+    metadata:
+      category: security
+      cwe: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      owasp: "A01:2021 - Broken Access Control"

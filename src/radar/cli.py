@@ -8,10 +8,6 @@ from rich.console import Console
 
 from radar import __version__
 
-# On Windows (and any system whose locale isn't UTF-8) the default codec for
-# stdout/stderr can be cp932, cp1252, cp936, etc. — all too narrow for the
-# Unicode glyphs rich uses. Upgrade to UTF-8 with lossy fallback so the CLI
-# never crashes regardless of the machine's locale setting.
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure") and getattr(_stream, "encoding", "").lower() != "utf-8":
         _stream.reconfigure(encoding="utf-8", errors="replace")
@@ -68,10 +64,9 @@ def impact(rev, staged, function_name, path, max_depth, no_name_only, graph_path
 
     if function_name:
         changed_ids = find_function_nodes(graph, function_name)
-        if not changed_ids and output_format == "terminal":
+        if not changed_ids:
             console.print(f"[red]No function named '{function_name}' in the graph.[/]")
             return
-        # json/mermaid/html: fall through to emit a valid empty result, not plain text
     else:
         changes = changed_lines(root, rev=rev, staged=staged)
         changed_ids = map_to_nodes(graph, changes)
@@ -103,7 +98,7 @@ def scan(path, rules_only, extra, output_format, gate, fail_on) -> None:
     root = Path(path).resolve()
     try:
         runtime = detect_runtime()
-        if output_format == "terminal":  # json/sarif stay pure for machines
+        if output_format == "terminal":
             console.print(f"[dim]scanning {root} via semgrep ({runtime})…[/]", highlight=False)
         report = run_semgrep(
             root, rules_only=rules_only, sarif=(output_format == "sarif"), extra_config=list(extra),
@@ -115,19 +110,35 @@ def scan(path, rules_only, extra, output_format, gate, fail_on) -> None:
 
     if output_format == "sarif":
         import json as _json
-
         click.echo(_json.dumps(report, indent=1))
         return
 
     items = findings_mod.parse(report)
+
+    # Apply suppression (inline radar-ignore comments + .radar-ignore file)
+    from radar.scan.suppress import filter_findings
+    items, suppressed = filter_findings(items, root)
+    if suppressed and output_format == "terminal":
+        console.print(f"[dim]{len(suppressed)} finding(s) suppressed (radar-ignore)[/]")
+
     if output_format == "json":
         from radar.scan.report import to_json
-
         click.echo(to_json(items))
     else:
         from radar.scan.report import render_terminal
-
         render_terminal(items, console)
+
+    # Save to scan history
+    from radar.scan.history import record
+    smry = findings_mod.summary(items)
+    record(
+        path=str(root),
+        rules_only=rules_only,
+        error=smry["error"],
+        warning=smry["warning"],
+        info=smry["info"],
+        suppressed=len(suppressed),
+    )
 
     if gate and findings_mod.exceeds_threshold(items, fail_on):
         sys.exit(1)
@@ -179,13 +190,50 @@ def triage(path, floor, only_all, dry_run, force, rules_only, extra, output_form
         console.print(f"[dim]{calls} API call(s) this run; the rest served from cache.[/]")
 
 
-def _load_or_build_graph(root: Path, graph_override: Path | None = None):
-    """Resolve a graph without writing into the target repo.
+@main.command()
+@click.option("--path", "path", default=None, help="Filter by repo path (substring match)")
+@click.option("--limit", default=20, help="Number of entries to show (default: 20)")
+@click.option("--format", "output_format", type=click.Choice(["terminal", "html"]),
+              default="terminal", help="Output format")
+def history(path, limit, output_format) -> None:
+    """Show scan history and trend for a repository."""
+    from radar.scan.history import load, render_history_html
 
-    Order: explicit --graph → in-repo .radar/graph.json (if fresh, for `radar build`
-    users) → external cache (if fresh) → build into external cache. The auto-build
-    never touches the target repo, so `radar impact --path <other>` is zero-footprint.
-    """
+    entries = load(path_filter=path, limit=limit)
+    if not entries:
+        console.print("[yellow]No scan history found.[/] Run [cyan]radar scan[/] first.")
+        return
+
+    if output_format == "html":
+        click.echo(render_history_html(entries, repo_path=path or ""))
+        return
+
+    from rich.table import Table
+    table = Table(title=f"Scan history ({len(entries)} entries)", show_lines=True)
+    table.add_column("Time", style="dim")
+    table.add_column("ERROR", style="red bold")
+    table.add_column("WARN", style="yellow bold")
+    table.add_column("Total", style="bold")
+    table.add_column("Suppressed", style="dim")
+    table.add_column("Repo", style="cyan", no_wrap=False, max_width=40)
+
+    for e in reversed(entries):
+        table.add_row(
+            e["ts"], str(e["error"]), str(e["warning"]),
+            str(e["total"]), str(e.get("suppressed", 0)),
+            e["path"].replace(str(Path.home()), "~"),
+        )
+    console.print(table)
+
+    if len(entries) >= 2:
+        delta = entries[-1]["total"] - entries[-2]["total"]
+        arrow = "↑" if delta > 0 else ("↓" if delta < 0 else "→")
+        color = "red" if delta > 0 else ("green" if delta < 0 else "dim")
+        console.print(f"Trend vs previous scan: [{color}]{arrow} {abs(delta):+d} findings[/]")
+
+
+def _load_or_build_graph(root: Path, graph_override: Path | None = None):
+    """Resolve a graph without writing into the target repo."""
     from radar.cache import graph_cache_path
     from radar.config import load_config
     from radar.graph.builder import build_graph, git_head, load_graph, save_graph
@@ -212,11 +260,27 @@ def _load_or_build_graph(root: Path, graph_override: Path | None = None):
     if cached is not None:
         return cached
 
-    # progress on stderr so json/sarif/mermaid/html stay pure on stdout
-    click.echo("building graph (cached outside the repo)…", err=True)
+    console.print("[dim]building graph (cached outside the repo)…[/]")
     graph = build_graph(root, config=load_config(root))
     save_graph(graph, cache_path)
     return graph
+
+
+@main.command()
+@click.argument("path", type=click.Path(exists=True, file_okay=False), default=".")
+@click.option("--ext", "extra_exts", multiple=True,
+              help="Extra file extensions to watch (e.g. --ext .rb --ext .php)")
+def watch(path, extra_exts) -> None:
+    """Live security linter — scan files on save, show NEW/FIXED findings instantly."""
+    import shutil
+    from radar.scan.runner import RULES_DIR
+    from radar.scan.watcher import WATCHED_EXTENSIONS, run_watch
+
+    root = Path(path).resolve()
+    use_docker = not shutil.which("semgrep") and shutil.which("docker")
+
+    exts = WATCHED_EXTENSIONS | {e if e.startswith(".") else f".{e}" for e in extra_exts}
+    run_watch(root, rules_dir=RULES_DIR, use_docker=use_docker, extensions=exts)
 
 
 if __name__ == "__main__":

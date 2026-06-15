@@ -1,0 +1,26 @@
+rules:
+  - id: js-ssrf-user-input
+    languages:
+      - javascript
+      - typescript
+    message: >-
+      Server-Side Request Forgery (SSRF): user-controlled input flows into an HTTP
+      request. An attacker can make the server fetch arbitrary internal URLs.
+      Validate and allowlist URLs before use.
+    severity: ERROR
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.query
+      - pattern: $REQ.body
+      - pattern: $REQ.params
+    pattern-sinks:
+      - pattern: fetch(...)
+      - pattern: axios.get(...)
+      - pattern: axios.post(...)
+      - pattern: axios.request(...)
+      - pattern: http.get(...)
+      - pattern: https.get(...)
+    metadata:
+      category: security
+      cwe: "CWE-918: Server-Side Request Forgery (SSRF)"
+      owasp: "A10:2021 - Server-Side Request Forgery (SSRF)"

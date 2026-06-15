@@ -2,16 +2,16 @@
 
 > Một tool. Cài 1 lần, quét **lỗ hổng bảo mật** và truy **blast radius** trên repo bất kỳ — **không để lại dấu vết** lên repo đó.
 
-[![Security Scan](../../actions/workflows/security-scan.yml/badge.svg)](../../actions/workflows/security-scan.yml)
+[![Security Scan](https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2/actions/workflows/security-scan.yml/badge.svg)](https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2/actions/workflows/security-scan.yml)
 
 `radar` là CLI local với 2 năng lực, dùng độc lập:
 
-1. **`radar scan`** — quét lỗ hổng bằng [Semgrep](https://semgrep.dev) (preset chuẩn ngành + 6 custom rules). Tự chạy native hoặc Docker.
+1. **`radar scan`** — quét lỗ hổng bằng [Semgrep](https://semgrep.dev) (preset chuẩn ngành + 13 custom rules). Tự chạy native hoặc Docker.
 2. **`radar impact`** — dựng function-level call graph trả lời *"sửa hàm này thì function / API / feature nào bị ảnh hưởng?"*
 
 > 🔒 **Zero-footprint** — cả hai lệnh chạy trên repo bất kỳ mà **không tạo file nào** trong repo đó: scan đọc kết quả Semgrep qua stdout; impact lưu graph cache *ngoài* repo. Bạn cũng có thể [gắn vào GitHub Actions](#phần-4--gắn-vào-ci-github-actions) để tự động hoá theo PR.
 
-**Ngôn ngữ:** scan = 30+ ngôn ngữ (Semgrep tự nhận diện) · impact graph = **JS/TS** (`.js .jsx .ts .tsx .mjs .cjs`) + **Python** (`.py`), route detect cho Express / Flask / FastAPI.
+**Ngôn ngữ:** scan = 30+ ngôn ngữ (Semgrep tự nhận diện) · impact graph = **JS/TS** (`.js .jsx .ts .tsx .mjs .cjs`) + **Python** (`.py`) + **Go** (`.go`) + **Java** (`.java`), route detect cho Express / Flask / FastAPI / net·http / gorilla·mux / Spring MVC / JAX-RS.
 
 ---
 
@@ -39,7 +39,7 @@ Thiếu cả hai → `radar scan` báo lỗi rõ. `radar impact` không cần Se
 Quét ngay trên máy, không cần CI, **không ghi gì** vào repo được quét:
 
 ```bash
-radar scan .                          # quét repo hiện tại (preset + 6 custom rules)
+radar scan .                          # quét repo hiện tại (preset + 13 custom rules)
 radar scan ../other-repo              # quét repo khác
 radar scan --rules-only               # offline: chỉ custom rules, bỏ preset (không cần mạng)
 radar scan --format json > out.json   # máy đọc
@@ -58,16 +58,23 @@ Output mặc định — bảng terminal gom theo severity:
 - **Mặc định không block** (exit 0) — chỉ informational. `--error` mới làm exit≠0; `--fail-on error|warning|info` chọn ngưỡng.
 - **`--rules-only`** chạy được offline (chỉ custom rules). Mặc định có thêm preset registry (`p/security-audit`, `p/secrets`, `p/owasp-top-ten`) — cần mạng lần đầu.
 
-### 6 custom rules đi kèm
+### 13 custom rules đi kèm
 
-| Rule | Bắt gì |
-|---|---|
-| `js-sql-string-concat` | SQL build bằng concat / template literal |
-| `js-hardcoded-jwt-secret` | `jwt.sign/verify` với secret literal |
-| `js-child-process-user-input` | `req.*` chảy vào `exec()` (taint mode) |
-| `js-express-xss` | `req.*` chảy vào `res.send()/write()` — XSS (taint mode, OWASP A03) |
-| `py-subprocess-shell-true` | `subprocess` + `shell=True` + chuỗi động |
-| `py-flask-debug-true` | `app.run(debug=True)` |
+| Rule | OWASP | Bắt gì |
+|---|---|---|
+| `js-sql-string-concat` | A03 | SQL build bằng concat / template literal |
+| `js-hardcoded-jwt-secret` | A07 | `jwt.sign/verify` với secret literal |
+| `js-child-process-user-input` | A03 | `req.*` chảy vào `exec()` (taint mode) |
+| `js-express-xss` | A03 | `req.*` chảy vào `res.send()/write()` — XSS (taint mode) |
+| `js-ssrf-user-input` | A10 | `req.*` chảy vào `fetch`/`axios`/`http.get` — SSRF (taint mode) |
+| `js-path-traversal` | A01 | `req.*` chảy vào `fs.readFile`/`writeFile` (taint mode) |
+| `js-eval-user-input` | A08 | `req.*` chảy vào `eval()`/`Function()` — Code Injection (taint mode) |
+| `py-subprocess-shell-true` | A03 | `subprocess` + `shell=True` + chuỗi động |
+| `py-flask-debug-true` | A05 | `app.run(debug=True)` |
+| `py-ssrf-user-input` | A10 | `request.args` chảy vào `requests.get`/`urllib` — SSRF (taint mode) |
+| `py-path-traversal` | A01 | `request.args` chảy vào `open`/`os.path.join`/`Path` (taint mode) |
+| `py-unsafe-deserialization` | A08 | `pickle.loads` (luôn flag) + `yaml.load` không dùng `SafeLoader` |
+| `py-flask-hardcoded-secret` | A07 | `app.secret_key = "literal"` (pattern-not `os.environ`) |
 
 Rules đóng gói trong package (`src/radar/rules/`) nên đi theo `pip install`. Mỗi rule có fixture test (`// ruleid:` / `ok:`); thêm rule mới = 1 cặp `.yaml` + fixture trong `src/radar/rules/`.
 
@@ -197,13 +204,58 @@ Kịch bản 5 phút (sửa 1 hàm → mở PR → xem findings + blast radius):
 
 ## Mở rộng ngôn ngữ (impact graph)
 
-Thêm ngôn ngữ = thêm **1 file plugin** trong `src/radar/graph/languages/` (subclass `LanguageExtractor`), registry tự phát hiện — không sửa core. Xem `python.py` làm mẫu.
+Impact graph hỗ trợ **4 ngôn ngữ** out-of-the-box:
+
+| Ngôn ngữ | Extension | Route detect |
+|---|---|---|
+| JavaScript / TypeScript | `.js .jsx .ts .tsx .mjs .cjs` | Express (`app.get/post/…`) |
+| Python | `.py` | Flask, FastAPI |
+| Go | `.go` | `net/http` (`HandleFunc`), gorilla/mux (`.Get/.Post/…`) |
+| Java | `.java` | Spring MVC (`@GetMapping`, `@RequestMapping`), JAX-RS (`@GET` + `@Path`) |
+
+Go và Java parser được cài tự động khi `pip install .` trên Python ≥ 3.11. Nếu bạn đang dùng Python cũ hơn hoặc muốn cài thủ công:
+```bash
+pip install tree-sitter-go tree-sitter-java
+# hoặc qua extras:
+pip install "security-radar[go,java]"
+```
+
+Cả hai plugin **graceful degrade** — nếu parser chưa có thì tự bỏ qua, không crash, chỉ không parse file `.go`/`.java`.
+
+Thêm ngôn ngữ mới = thêm **1 file plugin** trong `src/radar/graph/languages/` (subclass `LanguageExtractor`), registry tự phát hiện — không sửa core. Xem `python.py` làm mẫu.
+
+## Stack công nghệ
+
+| Thành phần | Thư viện / Tool | Ghi chú |
+|---|---|---|
+| Static analysis engine | [Semgrep](https://semgrep.dev) | Dùng taint mode để trace data flow source → sink |
+| Custom OWASP rules | YAML (Semgrep DSL) | 13 rules tự viết, đóng gói trong package |
+| AST parser | [tree-sitter](https://tree-sitter.github.io) + bindings JS/TS/Python/Go/Java | Parse codebase thành AST, tự viết extractor cho từng ngôn ngữ |
+| Call graph | [NetworkX](https://networkx.org) `DiGraph` | Lưu function calls + imports; reverse BFS để tính blast radius |
+| CLI | [Click](https://click.palletsprojects.com) | Subcommands `radar scan / impact / build` |
+| Terminal output | [Rich](https://rich.readthedocs.io) | Bảng màu, tree view |
+| HTML report | [Jinja2](https://jinja.palletsprojects.com) + Mermaid.js | Template `.j2`, diagram render phía client |
+| Testing | pytest + Semgrep `--test` | 103 unit tests; rule fixtures với `// ruleid:` / `ok:` |
+
+> Phần **scan** dùng Semgrep làm engine, mình viết rules. Phần **call graph** tự build từ đầu bằng tree-sitter (parse AST) và NetworkX (lưu graph + BFS).
+
+## Validation thực tế
+
+Đã chạy `radar scan --rules-only` trên [OWASP/NodeGoat](https://github.com/OWASP/NodeGoat) — ứng dụng Node.js cố ý chứa lỗ hổng:
+
+| Kết quả | Chi tiết |
+|---|---|
+| **8 findings** (5 ERROR · 3 WARNING) | eval injection A08, SSRF A10, XSS A03, NoSQL injection, open redirect A01, plaintext password A07, session fixation A07, ReDoS A05 |
+| **Coverage** | 5/8 lỗ hổng intentional của NodeGoat bị bắt bởi custom rules |
+| **Impact graph** | Trace đúng `validateLogin → handleLoginRequest`, `searchCriteria → displayAllocations` |
+| **True negatives** | `js-sql-string-concat` không false-positive trên MongoDB |
+
+Gap còn lại (NoSQL injection, open redirect, ReDoS) nằm trong [roadmap](docs/development-roadmap.md).
 
 ## Giới hạn (by design)
 
-- Call graph là **xấp xỉ**: same-file → import map → receiver `new Class()` → khớp tên toàn cục (nhãn `⚠ approx`). Dynamic call (`obj[x]()`) bỏ qua — fallback edge import file-level.
-- **Hỗ trợ** handler-object kiểu Express/NodeGoat: `app.post(path, instance.method)` + `const instance = new Class()` → nối route→handler và `new`→class.
-- **Còn bỏ sót** (xấp xỉ/None): handler từ DI container, factory trả handler động, `app[method]()` dynamic dispatch, receiver gán lại nhiều lần. Không type-aware.
+- Call graph là **xấp xỉ**: same-file → import map → khớp tên toàn cục (nhãn `⚠ approx`). Dynamic call (`obj[x]()`) bỏ qua — fallback edge import file-level.
+- Không type-aware, không dynamic dispatch.
 
 ## Development
 

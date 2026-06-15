@@ -1,0 +1,21 @@
+rules:
+  - id: js-hardcoded-crypto-key
+    patterns:
+      - pattern-either:
+          - pattern: crypto.createCipheriv($ALG, "$KEY", ...)
+          - pattern: crypto.createDecipheriv($ALG, "$KEY", ...)
+          - pattern: crypto.createHmac($ALG, "$KEY")
+          - pattern: |
+              const $VAR = "$KEY";
+              ...
+              crypto.createCipheriv(..., $VAR, ...)
+    message: >
+      Hardcoded cryptographic key detected. Embedding keys in source code
+      exposes them to anyone with repo access. Use environment variables or
+      a secrets manager (e.g. process.env.ENCRYPTION_KEY).
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-321: Use of Hard-coded Cryptographic Key"
+      owasp: "A02:2021 - Cryptographic Failures"
