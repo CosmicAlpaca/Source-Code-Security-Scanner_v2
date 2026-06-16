@@ -1,8 +1,14 @@
 """Render scan Findings: rich terminal table, stable JSON, or HTML report."""
 
+import html
 import json
 from collections import defaultdict
 from datetime import datetime
+
+
+def _esc(s) -> str:
+    """HTML-escape any dynamic value (text + attribute contexts)."""
+    return html.escape(str(s), quote=True)
 
 from rich.console import Console
 from rich.markup import escape
@@ -257,3 +263,168 @@ def to_html(findings: list[Finding], repo_path: str = "", suppressed: int = 0) -
 
 # Keep old name for backward compat
 to_html_report = to_html
+
+
+# ── Unified dashboard (scan + impact + history + optional AI triage) ───────────
+
+# Matches the exploitability vocabulary in triage/llm_client.py
+_EXPLOIT_COLOR = {
+    "exploitable": "#c0392b",   # red — most severe
+    "likely": "#d68910",        # orange
+    "unlikely": "#7f8c8d",      # gray
+    "false_positive": "#95a5a6",
+}
+
+
+def _reach_cell(entry: dict) -> str:
+    """Reachability badge. reachability.py only emits 'reachable' or 'unknown'."""
+    routes = entry.get("routes") or []
+    if entry.get("reach") == "reachable":
+        suffix = (" via " + str(len(routes)) + " route" + ("s" if len(routes) != 1 else "")) if routes else ""
+        return _badge("reachable" + suffix, "#1e8449", "#eafaf1")
+    return _badge("unknown", "#b9770e", "#fef9e7")
+
+
+def _verdict_cell(entry: dict) -> str:
+    """AI verdict badge (exploitability + confidence) with reasoning tooltip."""
+    if entry.get("error"):
+        return _badge("error", "#7f8c8d", "#f4f6f7")
+    v = entry.get("verdict")
+    if not v:
+        return '<span style="color:#b0b8c0">—</span>'
+    exploit = str(v.get("exploitability", "unlikely")).lower()
+    conf = v.get("confidence", 0.0)
+    try:
+        conf_pct = str(round(float(conf) * 100)) + "%"
+    except (TypeError, ValueError):
+        conf_pct = "—"
+    color = _EXPLOIT_COLOR.get(exploit, "#7f8c8d")
+    reasoning = _esc(v.get("reasoning", ""))[:300]
+    return (
+        '<span title="' + reasoning + '">'
+        + _badge(_esc(exploit), color, "white")
+        + ' <span style="color:#7f8c8d;font-size:11px">' + conf_pct + "</span></span>"
+    )
+
+
+def _dashboard_rows(findings: list[Finding], verdict_map: dict | None) -> str:
+    """Findings table rows; +2 cells per row (reachability, AI verdict) when triaged."""
+    triage = verdict_map is not None
+    span = 7 if triage else 5
+    by_file: dict[str, list[Finding]] = defaultdict(list)
+    for f in findings:
+        by_file[f.path].append(f)
+
+    rows = ""
+    for fpath, ff in sorted(by_file.items()):
+        rows += (
+            '<tr class="file-row"><td colspan="' + str(span) + '" style="background:#f0f3f7;'
+            'padding:8px 14px;font-weight:700;font-size:13px;color:#34495e;border-top:2px solid #d5dce8">'
+            "📄 " + _esc(fpath) + " (" + str(len(ff)) + ")</td></tr>\n"
+        )
+        for f in sorted(ff, key=lambda x: x.line):
+            rule_short = f.rule.rsplit(".", 1)[-1]
+            oc, ol = _owasp_tag(rule_short)
+            sev = f.severity
+            cells = (
+                '<td style="padding:8px 12px;text-align:center">' + _badge(_esc(sev), _SEV_COLOR.get(sev, "#7f8c8d"), _SEV_BG.get(sev, "white")) + "</td>"
+                '<td style="padding:8px 12px;font-family:monospace;color:#2471a3">' + str(f.line) + "</td>"
+                '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#6c3483">' + _esc(rule_short) + "</td>"
+                '<td style="padding:8px 12px">' + _owasp_chip(oc, ol) + "</td>"
+                '<td style="padding:8px 12px;font-size:13px">' + _esc(f.message[:160]) + "</td>"
+            )
+            if triage:
+                entry = verdict_map.get((f.path, f.line, f.rule), {})
+                cells += (
+                    '<td style="padding:8px 12px">' + _reach_cell(entry) + "</td>"
+                    '<td style="padding:8px 12px">' + _verdict_cell(entry) + "</td>"
+                )
+            rows += '<tr class="finding-row" data-sev="' + sev + '">' + cells + "</tr>\n"
+    return rows
+
+
+def render_dashboard(
+    repo_path: str,
+    findings: list[Finding],
+    suppressed: int,
+    mermaid_src: str = "",
+    traced_fn: str | None = None,
+    history: list | None = None,
+    verdict_map: dict | None = None,
+) -> str:
+    """One-file HTML dashboard: cards + findings (+optional AI triage cols) + blast radius + history."""
+    history = history or []
+    s = summary(findings)
+    triage = verdict_map is not None
+
+    cards = (
+        _card(s["error"], "ERROR", "#c0392b", "#fdf2f2")
+        + _card(s["warning"], "WARNING", "#d68910", "#fefaf0")
+        + _card(s["info"], "INFO", "#1a5276", "#eaf4fb")
+        + _card(suppressed, "SUPPRESSED", "#7f8c8d", "#f4f6f7")
+    )
+
+    extra_head = "<th>Reachability</th><th>AI verdict</th>" if triage else ""
+    table = (
+        "<table><thead><tr>"
+        '<th style="width:90px">Severity</th><th style="width:60px">Line</th>'
+        '<th style="width:180px">Rule</th><th style="width:140px">OWASP</th><th>Message</th>'
+        + extra_head
+        + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"
+    )
+
+    mermaid_section = ""
+    if mermaid_src:
+        fn_note = (' <span style="font-size:12px;color:#7f8c8d;font-weight:400">' + _esc(traced_fn) + "</span>") if traced_fn else ""
+        mermaid_section = (
+            '<div class="panel" style="margin-top:20px"><div class="panel-header">'
+            '<span class="panel-title">🔗 Blast Radius — Call Graph' + fn_note + "</span></div>"
+            '<div style="padding:1.5rem;overflow-x:auto;background:#fafafa">'
+            '<pre class="mermaid">\n' + mermaid_src + "\n</pre></div></div>"
+        )
+
+    history_section = ""
+    chart_script = ""
+    if history:
+        history_section = (
+            '<div class="panel" style="margin-top:20px"><div class="panel-header">'
+            '<span class="panel-title">📈 Scan History Trend</span></div>'
+            '<div style="padding:1.5rem"><canvas id="hChart" height="70"></canvas></div></div>'
+        )
+        chart_script = (
+            '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>'
+            "<script>new Chart(document.getElementById('hChart'),{type:'line',data:{labels:"
+            + json.dumps([e["ts"] for e in history])
+            + ",datasets:[{label:'ERROR',data:" + json.dumps([e["error"] for e in history])
+            + ",borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,0.08)',tension:0.3,fill:true},"
+            + "{label:'WARNING',data:" + json.dumps([e["warning"] for e in history])
+            + ",borderColor:'#d68910',backgroundColor:'rgba(214,137,16,0.08)',tension:0.3,fill:true}]},"
+            + "options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});</script>"
+        )
+
+    mermaid_script = (
+        '<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";'
+        "mermaid.initialize({startOnLoad:true,theme:'default'});</script>"
+        if mermaid_src else ""
+    )
+
+    mode = "AI-triaged" if triage else "offline scan"
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    return (
+        '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+        "<title>security-radar — Dashboard</title>\n<style>" + _CSS + "</style>\n</head>\n<body>\n"
+        '<div class="header"><h1>⚡ security-radar — Dashboard</h1>'
+        '<div class="meta">' + _esc(repo_path) + " &nbsp;·&nbsp; " + mode + " &nbsp;·&nbsp; " + ts + "</div></div>\n"
+        '<div class="cards">' + cards + "</div>\n"
+        '<div class="panel"><div class="panel-header"><span class="panel-title">🛡 Findings</span>'
+        "<div>"
+        "<button onclick=\"filterSev('ALL')\" style=\"margin:0 4px;padding:4px 12px;border:2px solid #34495e;background:#34495e;color:white;border-radius:20px;cursor:pointer;font-weight:600\">ALL</button>"
+        "<button onclick=\"filterSev('ERROR')\" style=\"margin:0 4px;padding:4px 12px;border:2px solid #e74c3c;background:white;color:#e74c3c;border-radius:20px;cursor:pointer;font-weight:600\">ERROR</button>"
+        "<button onclick=\"filterSev('WARNING')\" style=\"margin:0 4px;padding:4px 12px;border:2px solid #f39c12;background:white;color:#f39c12;border-radius:20px;cursor:pointer;font-weight:600\">WARNING</button>"
+        "</div></div>" + table + "</div>\n"
+        + mermaid_section + history_section
+        + "\n<footer>Generated by security-radar</footer>\n"
+        "<script>" + _JS + "</script>\n" + chart_script + mermaid_script
+        + "\n</body></html>"
+    )

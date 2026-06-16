@@ -29,6 +29,7 @@ class ImpactItem:
     parent: str = ""  # node id it was discovered from (BFS predecessor)
     confidence: str = RESOLVED
     routes: list[str] = field(default_factory=list)  # route names handling this node
+    findings: list[dict] = field(default_factory=list)  # overlay: [{"severity","rule"}] when --findings
 
 
 @dataclass

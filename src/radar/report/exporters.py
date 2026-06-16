@@ -20,7 +20,7 @@ _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 def to_json(result: ImpactResult) -> str:
     payload = {
-        "schema": 1,
+        "schema": 1,  # additive: items may carry a `findings` list (--findings); back-compatible
         "changed": [asdict(i) for i in result.changed],
         "affected": [asdict(i) for i in result.affected],
         "apis": result.apis,
@@ -57,6 +57,9 @@ def to_mermaid(result: ImpactResult) -> str:
     for item in items:
         if item.kind == "route" and item.id in ids and item not in result.changed:
             lines.append(f"    style {ids[item.id]} fill:#8f8,stroke:#080")
+    for item in items:  # findings overlay — bold red border, wins over base styles
+        if item.findings and item.id in ids:
+            lines.append(f"    style {ids[item.id]} fill:#fdd,stroke:#c00,stroke-width:3px")
     hidden = len(result.changed) + len(result.affected) - len(items)
     if hidden > 0:
         lines.append(f'    more["…{hidden} nodes hidden"]')

@@ -13,6 +13,7 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 console = Console()
+err_console = Console(stderr=True)  # progress/warnings — keeps --format json|mermaid stdout clean
 
 
 @click.group()
@@ -42,6 +43,32 @@ def build(path: str, out_path: str | None) -> None:
     )
 
 
+def _overlay_findings(root: Path, graph, result, *, rules_only: bool) -> None:
+    """Scan for findings and tag each blast-radius node that carries one (in place)."""
+    from collections import defaultdict
+
+    from radar.impact.diff_mapper import map_to_nodes
+    from radar.scan import findings as fm
+    from radar.scan.runner import ScanError, detect_runtime, run_semgrep
+    from radar.scan.suppress import filter_findings
+
+    try:
+        raw = run_semgrep(root, rules_only=rules_only, sarif=False, runtime=detect_runtime())
+    except ScanError as exc:
+        err_console.print(f"[yellow]⚠ findings overlay skipped:[/] {exc}")
+        return
+
+    items, _suppressed = filter_findings(fm.parse(raw), root)
+    findings_by_node: dict[str, list] = defaultdict(list)
+    for f in items:
+        for nid in map_to_nodes(graph, {f.path: {f.line}}):
+            findings_by_node[nid].append({"severity": f.severity, "rule": f.rule.rsplit(".", 1)[-1]})
+
+    for item in (*result.changed, *result.affected):
+        if item.id in findings_by_node:
+            item.findings = findings_by_node[item.id]
+
+
 @main.command()
 @click.option("--diff", "rev", default=None, help="Git revision to diff against (default: HEAD~1)")
 @click.option("--staged", is_flag=True, help="Use staged changes instead of a revision")
@@ -49,13 +76,21 @@ def build(path: str, out_path: str | None) -> None:
 @click.option("--path", "path", type=click.Path(exists=True, file_okay=False), default=".", help="Repo root")
 @click.option("--depth", "max_depth", type=int, default=None, help="Limit traversal depth")
 @click.option("--no-name-only", is_flag=True, help="Skip approximate (name-only) edges")
+@click.option("--findings", "do_findings", is_flag=True,
+              help="Overlay security findings on the blast radius (runs a Semgrep scan)")
+@click.option("--rules-only", is_flag=True, help="With --findings: only bundled custom rules (offline)")
 @click.option("--graph", "graph_path", type=click.Path(exists=True, dir_okay=False), default=None,
               help="Use an existing graph.json (skip auto-build)")
 @click.option("--format", "output_format", type=click.Choice(["terminal", "json", "mermaid", "html"]),
               default="terminal", help="Output format")
 @click.option("--out", "out_file", default=None, help="Write output to file (auto-named when --format html)")
-def impact(rev, staged, function_name, path, max_depth, no_name_only, graph_path, output_format, out_file) -> None:
-    """Show functions/APIs/features affected by a change."""
+def impact(rev, staged, function_name, path, max_depth, no_name_only, do_findings, rules_only,
+           graph_path, output_format, out_file) -> None:
+    """Show functions/APIs/features affected by a change.
+
+    Add --findings to mark which affected functions carry security findings
+    (answers "does my change touch / ripple into vulnerable code?").
+    """
     from radar.impact.diff_mapper import changed_lines, find_function_nodes, map_to_nodes
     from radar.impact.tracer import trace
     from radar.report.terminal import render_impact
@@ -73,6 +108,9 @@ def impact(rev, staged, function_name, path, max_depth, no_name_only, graph_path
         changed_ids = map_to_nodes(graph, changes)
 
     result = trace(graph, changed_ids, max_depth=max_depth, include_name_only=not no_name_only)
+
+    if do_findings:
+        _overlay_findings(root, graph, result, rules_only=rules_only)
     if output_format == "terminal":
         render_impact(result, console)
     else:
@@ -282,7 +320,7 @@ def _load_or_build_graph(root: Path, graph_override: Path | None = None):
     if cached is not None:
         return cached
 
-    console.print("[dim]building graph (cached outside the repo)…[/]")
+    err_console.print("[dim]building graph (cached outside the repo)…[/]")
     graph = build_graph(root, config=load_config(root))
     save_graph(graph, cache_path)
     return graph
@@ -310,31 +348,66 @@ def watch(path, extra_exts) -> None:
 @click.option("--rules-only", is_flag=True, help="Offline scan — only bundled custom rules")
 @click.option("--function", "function_name", default=None,
               help="Function to trace blast radius for (default: auto-pick top ERROR finding)")
+@click.option("--triage", "do_triage", is_flag=True,
+              help="Add AI-triage columns (reachability + verdict). Needs OPENAI_API_KEY; opt-in.")
+@click.option("--floor", type=click.Choice(["error", "warning", "info"]), default="warning",
+              help="With --triage: only triage findings at/above this severity (default: warning)")
+@click.option("--force", is_flag=True, help="With --triage: ignore cached verdicts and re-query the model")
 @click.option("--out", "out_file", default=None,
               help="Output HTML path (default: <path>/radar-dashboard.html)")
-def report(path, rules_only, function_name, out_file) -> None:
-    """Generate a unified HTML dashboard: findings + impact graph + history trend."""
-    import json as _json
+def report(path, rules_only, function_name, do_triage, floor, force, out_file) -> None:
+    """Generate a unified HTML dashboard: findings + impact graph + history trend.
 
+    Add --triage to enrich each finding with reachability + an AI verdict column
+    (opt-in: needs OPENAI_API_KEY). Without it the dashboard is fully offline.
+    """
     from radar.scan import findings as findings_mod
     from radar.scan.history import load as load_history
+    from radar.scan.report import render_dashboard
     from radar.scan.runner import ScanError, detect_runtime, run_semgrep
     from radar.scan.suppress import filter_findings
 
     root = Path(path).resolve()
     dest = Path(out_file).resolve() if out_file else root / "radar-dashboard.html"
 
-    # ── 1. Scan ──────────────────────────────────────────────────────────────
-    console.print("[dim]① scanning…[/]")
-    try:
-        runtime = detect_runtime()
-        raw = run_semgrep(root, rules_only=rules_only, sarif=False, extra_config=[], runtime=runtime)
-    except ScanError as exc:
-        console.print(f"[red]scan failed:[/] {exc}")
-        raise SystemExit(2)
+    items: list = []
+    suppressed: list = []
+    verdict_map: dict | None = None
 
-    items = findings_mod.parse(raw)
-    items, suppressed = filter_findings(items, root)
+    # ── 1. Scan (+ optional AI triage) ───────────────────────────────────────
+    if do_triage:
+        from radar.triage import engine
+        from radar.triage.llm_client import TriageError
+        console.print("[dim]① scanning + AI triage…[/]")
+        try:
+            results, calls = engine.triage(
+                root, rules_only=rules_only, floor=floor, force=force,
+            )
+            items = [r.finding for r in results]
+            verdict_map = {
+                (r.finding.path, r.finding.line, r.finding.rule):
+                    {"reach": r.reach.status, "routes": r.reach.routes,
+                     "verdict": r.verdict, "error": getattr(r, "error", None)}
+                for r in results
+            }
+            console.print(f"[dim]   {calls} API call(s) this run; rest served from cache.[/]")
+        except (ScanError, TriageError) as exc:
+            console.print(f"[yellow]⚠ triage unavailable:[/] {exc}")
+            console.print("[dim]   rendering offline dashboard instead.[/]")
+            do_triage = False
+            verdict_map = None
+
+    if not do_triage:
+        console.print("[dim]① scanning…[/]")
+        try:
+            runtime = detect_runtime()
+            raw = run_semgrep(root, rules_only=rules_only, sarif=False, extra_config=[], runtime=runtime)
+        except ScanError as exc:
+            console.print(f"[red]scan failed:[/] {exc}")
+            raise SystemExit(2)
+        items = findings_mod.parse(raw)
+        items, suppressed = filter_findings(items, root)
+
     smry = findings_mod.summary(items)
 
     from radar.scan.history import record
@@ -342,194 +415,52 @@ def report(path, rules_only, function_name, out_file) -> None:
            error=smry["error"], warning=smry["warning"], info=smry["info"],
            suppressed=len(suppressed))
 
-    # ── 2. Impact graph ──────────────────────────────────────────────────────
+    # ── 2. Impact graph (blast radius) ───────────────────────────────────────
     mermaid_src = ""
-    impact_stats: dict = {}
+    trace_label = None
     console.print("[dim]② building call graph…[/]")
     try:
         from radar.config import load_config
         from radar.graph.builder import build_graph
-        from radar.impact.diff_mapper import find_function_nodes
+        from radar.impact.diff_mapper import find_function_nodes, map_to_nodes
         from radar.impact.tracer import trace
         from radar.report.exporters import to_mermaid
 
         graph = build_graph(root, config=load_config(root))
-
-        # Pick function to trace: explicit arg > first ERROR finding > first any finding
-        fn = function_name
-        if not fn and items:
-            errors = [f for f in items if f.severity == "ERROR"]
-            candidate = errors[0] if errors else items[0]
-            # Use rule name as function hint (rough heuristic)
-            fn = candidate.rule.rsplit(".", 1)[-1]
-
-        if fn:
-            node_ids = find_function_nodes(graph, fn)
+        if function_name:
+            node_ids = find_function_nodes(graph, function_name)
+            trace_label = "function: " + function_name
+        else:
+            # Auto: blast radius of the functions that CONTAIN the findings
+            # (severity-first, capped) — by location, not by rule name.
+            sev_rank = {"ERROR": 0, "WARNING": 1, "INFO": 2}
+            ranked = sorted(items, key=lambda f: sev_rank.get(f.severity, 3))
+            changes: dict = {}
+            for f in ranked[:15]:
+                changes.setdefault(f.path, set()).add(f.line)
+            node_ids = map_to_nodes(graph, changes) if changes else []
             if node_ids:
-                result = trace(graph, node_ids)
-                mermaid_src = to_mermaid(result)
-                impact_stats = result.stats.__dict__ if hasattr(result.stats, "__dict__") else {}
+                trace_label = str(len(node_ids)) + " finding site(s)"
+        if node_ids:
+            mermaid_src = to_mermaid(trace(graph, node_ids))
     except Exception as exc:
         console.print(f"[dim yellow]⚠ impact graph skipped: {exc}[/]")
 
     # ── 3. History trend ─────────────────────────────────────────────────────
     history = load_history(path_filter=str(root), limit=20)
 
-    # ── 4. Render HTML ───────────────────────────────────────────────────────
-    from radar.scan.report import _OWASP, _SEV_BG, _SEV_COLOR, _badge, _owasp_chip, _owasp_tag
-    from collections import defaultdict
-
-    by_file: dict = defaultdict(list)
-    for f in items:
-        by_file[f.path].append(f)
-
-    rows_html = ""
-    for fpath, ffindings in sorted(by_file.items()):
-        rows_html += (
-            '<tr class="file-row"><td colspan="5" style="background:#f0f3f7;padding:8px 14px;'
-            'font-weight:700;font-size:13px;color:#34495e;border-top:2px solid #d5dce8">'
-            "📄 " + fpath + " (" + str(len(ffindings)) + ")</td></tr>\n"
-        )
-        for f in sorted(ffindings, key=lambda x: x.line):
-            rule_short = f.rule.rsplit(".", 1)[-1]
-            oc, ol = _owasp_tag(rule_short)
-            sev = f.severity
-            rows_html += (
-                '<tr class="finding-row" data-sev="' + sev + '">'
-                '<td style="padding:8px 12px;text-align:center">' + _badge(sev, _SEV_COLOR[sev], _SEV_BG[sev]) + '</td>'
-                '<td style="padding:8px 12px;font-family:monospace;color:#2471a3">' + str(f.line) + '</td>'
-                '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#6c3483">' + rule_short + '</td>'
-                '<td style="padding:8px 12px">' + _owasp_chip(oc, ol) + '</td>'
-                '<td style="padding:8px 12px;font-size:13px">' + f.message[:160] + '</td>'
-                '</tr>\n'
-            )
-
-    # history chart data
-    h_labels = _json.dumps([e["ts"] for e in history])
-    h_errors  = _json.dumps([e["error"] for e in history])
-    h_warns   = _json.dumps([e["warning"] for e in history])
-
-    mermaid_section = ""
-    if mermaid_src:
-        mermaid_section = (
-            '<div class="panel" style="margin-top:20px">'
-            '<div class="panel-header">🔗 Blast Radius — Call Graph'
-            + (' <span style="font-size:12px;color:#7f8c8d;font-weight:400">function: ' + fn + '</span>' if fn else '')
-            + '</div>'
-            '<div style="padding:1.5rem;overflow-x:auto;background:#fafafa">'
-            '<pre class="mermaid">\n' + mermaid_src + '\n</pre>'
-            '</div></div>'
-        )
-
-    history_section = ""
-    if history:
-        history_section = (
-            '<div class="panel" style="margin-top:20px">'
-            '<div class="panel-header">📈 Scan History Trend</div>'
-            '<div style="padding:1.5rem"><canvas id="hChart" height="70"></canvas></div>'
-            '</div>'
-        )
-
-    html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>security-radar — Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#2c3e50;padding:2rem}
-.header{background:linear-gradient(135deg,#0d2137 0%,#1a5276 100%);color:white;padding:24px 32px;border-radius:10px;margin-bottom:24px}
-.header h1{font-size:1.6rem;margin-bottom:4px}
-.header .meta{font-size:13px;opacity:.7}
-.cards{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}
-.panel{background:white;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
-.panel-header{padding:14px 20px;border-bottom:1px solid #e8ecf0;font-weight:700;font-size:15px}
-table{width:100%;border-collapse:collapse}
-th,td{border-bottom:1px solid #eef1f5;padding:9px 12px;text-align:left;font-size:13px}
-th{background:#f0f3f7;font-size:11px;text-transform:uppercase;color:#7f8c8d;font-weight:700}
-tr:hover{background:#f8fafc}
-.hidden{display:none}
-footer{text-align:center;color:#95a5a6;font-size:12px;margin-top:28px}
-</style>
-</head>
-<body>
-
-<div class="header">
-  <h1>⚡ security-radar — Dashboard</h1>
-  <div class="meta">""" + str(root) + """ &nbsp;·&nbsp; offline scan &nbsp;·&nbsp; 17 OWASP rules</div>
-</div>
-
-<div class="cards">
-  <div style="background:#fdf2f2;border-left:5px solid #c0392b;border-radius:6px;padding:16px 24px;text-align:center">
-    <div style="font-size:2rem;font-weight:800;color:#c0392b">""" + str(smry['error']) + """</div>
-    <div style="font-size:12px;color:#c0392b;font-weight:600">ERROR</div>
-  </div>
-  <div style="background:#fefaf0;border-left:5px solid #d68910;border-radius:6px;padding:16px 24px;text-align:center">
-    <div style="font-size:2rem;font-weight:800;color:#d68910">""" + str(smry['warning']) + """</div>
-    <div style="font-size:12px;color:#d68910;font-weight:600">WARNING</div>
-  </div>
-  <div style="background:#f4f6f7;border-left:5px solid #7f8c8d;border-radius:6px;padding:16px 24px;text-align:center">
-    <div style="font-size:2rem;font-weight:800;color:#7f8c8d">""" + str(len(suppressed)) + """</div>
-    <div style="font-size:12px;color:#7f8c8d;font-weight:600">SUPPRESSED</div>
-  </div>
-</div>
-
-<div class="panel">
-  <div class="panel-header">
-    🛡 Findings
-    <span style="margin-left:12px">
-      <button onclick="fs('ALL')" style="padding:3px 12px;border:2px solid #34495e;background:#34495e;color:white;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600">ALL</button>
-      <button onclick="fs('ERROR')" style="padding:3px 12px;border:2px solid #e74c3c;background:white;color:#e74c3c;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600">ERROR</button>
-      <button onclick="fs('WARNING')" style="padding:3px 12px;border:2px solid #f39c12;background:white;color:#f39c12;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600">WARNING</button>
-    </span>
-  </div>
-  <table><thead><tr><th style="width:100px">Severity</th><th style="width:70px">Line</th><th style="width:200px">Rule</th><th style="width:150px">OWASP</th><th>Message</th></tr></thead>
-  <tbody id="tbody">""" + rows_html + """</tbody></table>
-</div>
-""" + mermaid_section + history_section + """
-
-<footer>Generated by security-radar v0.2.2</footer>
-
-<script>
-function fs(sev){
-  document.querySelectorAll('#tbody tr.finding-row').forEach(r=>{r.classList.toggle('hidden',sev!=='ALL'&&r.dataset.sev!==sev)});
-  document.querySelectorAll('#tbody tr.file-row').forEach(fr=>{
-    var n=fr.nextElementSibling,ok=false;
-    while(n&&n.classList.contains('finding-row')){if(!n.classList.contains('hidden'))ok=true;n=n.nextElementSibling;}
-    fr.classList.toggle('hidden',!ok);
-  });
-}
-</script>
-""" + ("""
-<script>
-new Chart(document.getElementById('hChart'),{
-  type:'line',
-  data:{
-    labels:""" + h_labels + """,
-    datasets:[
-      {label:'ERROR',data:""" + h_errors + """,borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,0.08)',tension:0.3,fill:true},
-      {label:'WARNING',data:""" + h_warns + """,borderColor:'#d68910',backgroundColor:'rgba(214,137,16,0.08)',tension:0.3,fill:true}
-    ]
-  },
-  options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
-});
-</script>
-""" if history else "") + ("""
-<script type="module">
-  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-  mermaid.initialize({startOnLoad:true,theme:'default'});
-</script>
-""" if mermaid_src else "") + """
-</body></html>"""
-
+    # ── 4. Render single-file HTML ───────────────────────────────────────────
+    html = render_dashboard(
+        repo_path=str(root), findings=items, suppressed=len(suppressed),
+        mermaid_src=mermaid_src, traced_fn=trace_label, history=history, verdict_map=verdict_map,
+    )
     dest.write_text(html, encoding="utf-8")
+
     console.print(f"[bold green]✓[/] Dashboard → [cyan]{dest}[/]")
     console.print(
-        f"   {smry['error']} error · {smry['warning']} warning · "
-        f"{len(suppressed)} suppressed"
-        + (f" · impact graph: {fn}" if mermaid_src else " · impact graph: skipped (run radar build first)")
+        f"   {smry['error']} error · {smry['warning']} warning · {len(suppressed)} suppressed"
+        + (" · AI-triaged" if verdict_map is not None else "")
+        + (f" · impact graph: {trace_label}" if mermaid_src else " · impact graph: skipped")
     )
 
 

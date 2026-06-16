@@ -100,6 +100,7 @@ radar build .
 radar impact --staged                 # đang sửa dở (đã git add), chưa commit
 radar impact --diff HEAD~1            # ảnh hưởng của commit cuối
 radar impact --diff main...HEAD       # toàn bộ branch so với main
+radar impact --diff HEAD~1 --findings # đánh dấu hàm có lỗ hổng trong blast radius (cần Semgrep)
 radar impact --function validateUser  # giả định: nếu sửa hàm này thì sao?
 ```
 
@@ -142,6 +143,21 @@ exclude: ["**/migrations/**"]   # bỏ qua khi index
 ```
 
 Không có config → mọi node là `(unmapped)`, tool vẫn chạy bình thường.
+
+---
+
+## Phần 3.5 — `radar report`: dashboard hợp nhất (1 file HTML)
+
+Không muốn chạy `scan` / `impact` riêng lẻ? `radar report` gói **findings + blast radius + history trend** vào **1 file HTML duy nhất**:
+
+```bash
+radar report .                 # dashboard offline: findings + impact graph + history
+radar report . --triage        # THÊM cột reachability + AI verdict cho mỗi finding (opt-in)
+radar report . --out dash.html # chọn đường dẫn output
+```
+
+- **`--triage`** enrich mỗi finding bằng reachability (từ call graph) + verdict AI (exploitability + confidence, reasoning qua tooltip). Cần `OPENAI_API_KEY` (env hoặc `.env` ở repo root); thiếu key → tự động render bản offline, không lỗi. `--floor` (mặc định `warning`) giới hạn severity được triage; `--force` bỏ cache verdict.
+- Không `--triage` → dashboard **hoàn toàn offline**, không gọi mạng.
 
 ---
 
