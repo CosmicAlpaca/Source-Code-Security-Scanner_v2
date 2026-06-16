@@ -124,7 +124,9 @@ def main(argv: list[str]) -> int:
     lines.extend(render_findings_section(load_findings(argv[1])))
     if len(argv) > 2:
         with open(argv[2], encoding="utf-8") as fh:
-            lines.extend(render_impact_section(json.load(fh)))
+            content = fh.read().strip()
+        if content:
+            lines.extend(render_impact_section(json.loads(content)))
     print("\n".join(lines))
     return 0
 

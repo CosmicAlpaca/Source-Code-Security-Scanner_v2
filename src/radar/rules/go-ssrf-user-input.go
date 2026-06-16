@@ -6,14 +6,13 @@ import (
 )
 
 func bad(r *http.Request) {
+	url := r.FormValue("url")
 	// ruleid: go-ssrf-user-input
-	target := r.URL.Query().Get("url")
-	// ruleid: go-ssrf-user-input
-	http.Get(target)
+	http.Get(url)
 }
 
 func bad2(r *http.Request) {
-	endpoint := r.FormValue("endpoint")
+	endpoint := r.PostFormValue("endpoint")
 	// ruleid: go-ssrf-user-input
 	resp, _ := http.Post(endpoint, "application/json", nil)
 	fmt.Println(resp)
