@@ -1,0 +1,27 @@
+rules:
+  - id: php-xss
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled value passed to output function without escaping — XSS risk.
+      Use htmlspecialchars() or htmlentities() before outputting user input.
+    metadata:
+      category: security
+      cwe: "CWE-79: Cross-site Scripting"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET[$KEY]
+      - pattern: $_POST[$KEY]
+      - pattern: $_REQUEST[$KEY]
+      - pattern: $_COOKIE[$KEY]
+    pattern-sinks:
+      - pattern: printf($SINK, ...)
+      - pattern: print_r($SINK)
+      - pattern: var_dump($SINK)
+      - pattern: fprintf($FH, $SINK, ...)
+    pattern-sanitizers:
+      - pattern: htmlspecialchars($S, ...)
+      - pattern: htmlentities($S, ...)
+      - pattern: strip_tags($S)

@@ -1,0 +1,20 @@
+rules:
+  - id: php-sql-injection
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled input concatenated directly into an SQL query — SQL Injection.
+      Use prepared statements with parameterized queries (PDO or MySQLi).
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    pattern-either:
+      - pattern: mysqli_query($DB, $Q . $_GET[...])
+      - pattern: mysqli_query($DB, $Q . $_POST[...])
+      - pattern: mysqli_query($DB, $Q . $_REQUEST[...])
+      - pattern: $DB->query($Q . $_GET[...])
+      - pattern: $DB->query($Q . $_POST[...])
+      - pattern: $DB->exec($Q . $_GET[...])
+      - pattern: $DB->exec($Q . $_POST[...])

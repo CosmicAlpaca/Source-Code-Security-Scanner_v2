@@ -1,12 +1,12 @@
 import xml.etree.ElementTree as ET
 
-# ruleid: py-xxe
 def bad(user_xml):
+    # ruleid: py-xxe
     tree = ET.parse(user_xml)
     return tree
 
-# ok: py-xxe
-def good(user_xml):
+def good(safe_path):
     import defusedxml.ElementTree as SafeET
-    tree = SafeET.parse(user_xml)
+    # ok: py-xxe
+    tree = SafeET.parse(safe_path)
     return tree

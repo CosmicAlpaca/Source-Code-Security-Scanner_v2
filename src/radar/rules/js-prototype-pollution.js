@@ -1,10 +1,20 @@
-app.post('/settings', (req, res) => {
-    // ruleid: js-prototype-pollution
-    Object.assign(config, req.body);
+const _ = require('lodash');
+const express = require('express');
+const router = express.Router();
+
+router.post('/settings', (req, res) => {
+  const config = {};
+  // ruleid: js-prototype-pollution
+  Object.assign(config, req.body);
+  res.json(config);
 });
 
-app.post('/safe', (req, res) => {
-    const { allowed_key } = req.body;
-    // ok: js-prototype-pollution
-    config.allowed_key = allowed_key;
+router.post('/merge', (req, res) => {
+  const defaults = { role: 'user' };
+  // ruleid: js-prototype-pollution
+  _.merge(defaults, req.body);
+  res.json(defaults);
 });
+
+// ok: js-prototype-pollution
+Object.assign({}, { name: 'static', value: 42 });
