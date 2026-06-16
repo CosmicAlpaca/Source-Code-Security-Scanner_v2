@@ -1,15 +1,20 @@
-function merge(target, source) {
-  for (const key in source) {
-    // ruleid: js-prototype-pollution
-    target[key] = source[key];
-  }
-}
+const _ = require('lodash');
+const express = require('express');
+const router = express.Router();
 
-function deepMerge(obj, payload) {
-  const key = payload.key;
+router.post('/settings', (req, res) => {
+  const config = {};
   // ruleid: js-prototype-pollution
-  obj[key] = payload.value;
-}
+  Object.assign(config, req.body);
+  res.json(config);
+});
+
+router.post('/merge', (req, res) => {
+  const defaults = { role: 'user' };
+  // ruleid: js-prototype-pollution
+  _.merge(defaults, req.body);
+  res.json(defaults);
+});
 
 // ok: js-prototype-pollution
-const safe = Object.assign({}, source);
+Object.assign({}, { name: 'static', value: 42 });
