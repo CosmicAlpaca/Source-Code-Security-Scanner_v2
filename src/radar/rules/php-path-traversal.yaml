@@ -1,0 +1,21 @@
+rules:
+  - id: php-path-traversal
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled path used in file operations — Path Traversal.
+      Validate paths with realpath() and check against an allowed base directory.
+    metadata:
+      category: security
+      cwe: "CWE-22: Path Traversal"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: HIGH
+    pattern-either:
+      - pattern: file_get_contents($_GET[...])
+      - pattern: file_get_contents($_POST[...])
+      - pattern: file_put_contents($_GET[...], ...)
+      - pattern: fopen($_GET[...], ...)
+      - pattern: fopen($_POST[...], ...)
+      - pattern: readfile($_GET[...])
+      - pattern: unlink($_GET[...])
+      - pattern: unlink($_POST[...])

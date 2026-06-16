@@ -1,0 +1,16 @@
+rules:
+  - id: php-open-redirect
+    languages: [php]
+    severity: WARNING
+    message: >-
+      User-controlled URL in header redirect allows Open Redirect attacks.
+      Validate redirect targets against a whitelist of trusted domains.
+    metadata:
+      category: security
+      cwe: "CWE-601: Open Redirect"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: HIGH
+    pattern-either:
+      - pattern: 'header("Location: " . $_GET[$KEY])'
+      - pattern: 'header("Location: " . $_POST[$KEY])'
+      - pattern: 'header("Location: " . $_REQUEST[$KEY])'
