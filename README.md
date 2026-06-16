@@ -100,6 +100,7 @@ radar build .
 radar impact --staged                 # đang sửa dở (đã git add), chưa commit
 radar impact --diff HEAD~1            # ảnh hưởng của commit cuối
 radar impact --diff main...HEAD       # toàn bộ branch so với main
+radar impact --diff HEAD~1 --findings # đánh dấu hàm có lỗ hổng trong blast radius (cần Semgrep)
 radar impact --function validateUser  # giả định: nếu sửa hàm này thì sao?
 ```
 

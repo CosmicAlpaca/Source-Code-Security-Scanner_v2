@@ -13,6 +13,7 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 console = Console()
+err_console = Console(stderr=True)  # progress/warnings — keeps --format json|mermaid stdout clean
 
 
 @click.group()
@@ -42,6 +43,32 @@ def build(path: str, out_path: str | None) -> None:
     )
 
 
+def _overlay_findings(root: Path, graph, result, *, rules_only: bool) -> None:
+    """Scan for findings and tag each blast-radius node that carries one (in place)."""
+    from collections import defaultdict
+
+    from radar.impact.diff_mapper import map_to_nodes
+    from radar.scan import findings as fm
+    from radar.scan.runner import ScanError, detect_runtime, run_semgrep
+    from radar.scan.suppress import filter_findings
+
+    try:
+        raw = run_semgrep(root, rules_only=rules_only, sarif=False, runtime=detect_runtime())
+    except ScanError as exc:
+        err_console.print(f"[yellow]⚠ findings overlay skipped:[/] {exc}")
+        return
+
+    items, _suppressed = filter_findings(fm.parse(raw), root)
+    findings_by_node: dict[str, list] = defaultdict(list)
+    for f in items:
+        for nid in map_to_nodes(graph, {f.path: {f.line}}):
+            findings_by_node[nid].append({"severity": f.severity, "rule": f.rule.rsplit(".", 1)[-1]})
+
+    for item in (*result.changed, *result.affected):
+        if item.id in findings_by_node:
+            item.findings = findings_by_node[item.id]
+
+
 @main.command()
 @click.option("--diff", "rev", default=None, help="Git revision to diff against (default: HEAD~1)")
 @click.option("--staged", is_flag=True, help="Use staged changes instead of a revision")
@@ -49,13 +76,21 @@ def build(path: str, out_path: str | None) -> None:
 @click.option("--path", "path", type=click.Path(exists=True, file_okay=False), default=".", help="Repo root")
 @click.option("--depth", "max_depth", type=int, default=None, help="Limit traversal depth")
 @click.option("--no-name-only", is_flag=True, help="Skip approximate (name-only) edges")
+@click.option("--findings", "do_findings", is_flag=True,
+              help="Overlay security findings on the blast radius (runs a Semgrep scan)")
+@click.option("--rules-only", is_flag=True, help="With --findings: only bundled custom rules (offline)")
 @click.option("--graph", "graph_path", type=click.Path(exists=True, dir_okay=False), default=None,
               help="Use an existing graph.json (skip auto-build)")
 @click.option("--format", "output_format", type=click.Choice(["terminal", "json", "mermaid", "html"]),
               default="terminal", help="Output format")
 @click.option("--out", "out_file", default=None, help="Write output to file (auto-named when --format html)")
-def impact(rev, staged, function_name, path, max_depth, no_name_only, graph_path, output_format, out_file) -> None:
-    """Show functions/APIs/features affected by a change."""
+def impact(rev, staged, function_name, path, max_depth, no_name_only, do_findings, rules_only,
+           graph_path, output_format, out_file) -> None:
+    """Show functions/APIs/features affected by a change.
+
+    Add --findings to mark which affected functions carry security findings
+    (answers "does my change touch / ripple into vulnerable code?").
+    """
     from radar.impact.diff_mapper import changed_lines, find_function_nodes, map_to_nodes
     from radar.impact.tracer import trace
     from radar.report.terminal import render_impact
@@ -73,6 +108,9 @@ def impact(rev, staged, function_name, path, max_depth, no_name_only, graph_path
         changed_ids = map_to_nodes(graph, changes)
 
     result = trace(graph, changed_ids, max_depth=max_depth, include_name_only=not no_name_only)
+
+    if do_findings:
+        _overlay_findings(root, graph, result, rules_only=rules_only)
     if output_format == "terminal":
         render_impact(result, console)
     else:
@@ -282,7 +320,7 @@ def _load_or_build_graph(root: Path, graph_override: Path | None = None):
     if cached is not None:
         return cached
 
-    console.print("[dim]building graph (cached outside the repo)…[/]")
+    err_console.print("[dim]building graph (cached outside the repo)…[/]")
     graph = build_graph(root, config=load_config(root))
     save_graph(graph, cache_path)
     return graph
