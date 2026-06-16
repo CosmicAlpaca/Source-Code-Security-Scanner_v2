@@ -5,13 +5,13 @@ import (
 	"os"
 )
 
-// ruleid: go-path-traversal
 func bad(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("file")
+	// ruleid: go-path-traversal
 	os.ReadFile("/uploads/" + name)
 }
 
-// ok: go-path-traversal
 func good(w http.ResponseWriter, r *http.Request) {
+	// ok: go-path-traversal
 	os.ReadFile("/uploads/safe-file.txt")
 }

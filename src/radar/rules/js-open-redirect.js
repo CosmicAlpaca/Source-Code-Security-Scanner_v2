@@ -1,9 +1,12 @@
-// ruleid: js-open-redirect
+const express = require('express');
+const app = express();
+
 app.get('/login', (req, res) => {
-  res.redirect(req.query.next);
+    // ruleid: js-open-redirect
+    res.redirect(req.query.next);
 });
 
-// ok: js-open-redirect
-app.get('/login', (req, res) => {
-  res.redirect('/dashboard');
+app.get('/safe', (req, res) => {
+    // ok: js-open-redirect
+    res.redirect('/dashboard');
 });

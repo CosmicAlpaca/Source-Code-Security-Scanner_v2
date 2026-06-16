@@ -1,10 +1,10 @@
-// ruleid: js-prototype-pollution
 app.post('/settings', (req, res) => {
-  Object.assign(config, req.body);
+    // ruleid: js-prototype-pollution
+    Object.assign(config, req.body);
 });
 
-// ok: js-prototype-pollution
-app.post('/settings', (req, res) => {
-  const { allowed_key } = req.body;
-  config.allowed_key = allowed_key;
+app.post('/safe', (req, res) => {
+    const { allowed_key } = req.body;
+    // ok: js-prototype-pollution
+    config.allowed_key = allowed_key;
 });

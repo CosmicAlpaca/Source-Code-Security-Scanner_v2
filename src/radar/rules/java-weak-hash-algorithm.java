@@ -1,18 +1,18 @@
 import java.security.MessageDigest;
 
-class Bad {
-    // ruleid: java-weak-hash-algorithm
+class TestWeakHash {
     void bad() throws Exception {
+        // ruleid: java-weak-hash-algorithm
         MessageDigest.getInstance("MD5");
     }
 
-    // ruleid: java-weak-hash-algorithm
     void bad2() throws Exception {
+        // ruleid: java-weak-hash-algorithm
         MessageDigest.getInstance("SHA-1");
     }
 
-    // ok: java-weak-hash-algorithm
     void good() throws Exception {
+        // ok: java-weak-hash-algorithm
         MessageDigest.getInstance("SHA-256");
     }
 }

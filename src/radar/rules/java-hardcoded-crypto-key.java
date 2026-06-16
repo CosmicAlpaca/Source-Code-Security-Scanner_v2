@@ -1,13 +1,13 @@
 import javax.crypto.spec.SecretKeySpec;
 
-class Bad {
-    // ruleid: java-hardcoded-crypto-key
+class TestHardcodedCryptoKey {
     void bad() {
+        // ruleid: java-hardcoded-crypto-key
         new SecretKeySpec("hardcoded-secret-key".getBytes(), "AES");
     }
 
-    // ok: java-hardcoded-crypto-key
     void good(byte[] keyBytes) {
+        // ok: java-hardcoded-crypto-key
         new SecretKeySpec(keyBytes, "AES");
     }
 }
