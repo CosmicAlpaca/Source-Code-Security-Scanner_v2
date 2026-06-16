@@ -1,0 +1,26 @@
+rules:
+  - id: py-path-traversal
+    languages:
+      - python
+    message: >-
+      Path Traversal: user-controlled input flows into a file system operation.
+      An attacker can read or write arbitrary files using '../' sequences.
+      Use os.path.basename() or validate against an allowed base directory.
+    severity: ERROR
+    mode: taint
+    pattern-sources:
+      - pattern: request.args.get(...)
+      - pattern: request.args[...]
+      - pattern: request.form.get(...)
+      - pattern: request.form[...]
+      - pattern: request.json.get(...)
+      - pattern: request.json[...]
+    pattern-sinks:
+      - pattern: open(...)
+      - pattern: os.path.join(...)
+      - pattern: pathlib.Path(...)
+      - pattern: Path(...)
+    metadata:
+      category: security
+      cwe: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      owasp: "A01:2021 - Broken Access Control"

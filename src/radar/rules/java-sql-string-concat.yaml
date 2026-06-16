@@ -1,0 +1,24 @@
+rules:
+  - id: java-sql-string-concat
+    languages: [java]
+    severity: ERROR
+    message: >-
+      SQL query built with string concatenation allows SQL injection.
+      Use PreparedStatement with ? placeholders instead of Statement.execute().
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+      owasp: "A03:2021 - Injection"
+      confidence: MEDIUM
+      references:
+        - https://owasp.org/www-community/attacks/SQL_Injection
+    pattern-either:
+      - pattern: $STMT.execute($A + $B)
+      - pattern: $STMT.executeQuery($A + $B)
+      - pattern: $STMT.executeUpdate($A + $B)
+      - patterns:
+          - pattern: $CONN.prepareStatement($Q)
+          - metavariable-pattern:
+              metavariable: $Q
+              pattern-either:
+                - pattern: $A + $B

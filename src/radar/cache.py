@@ -20,17 +20,11 @@ def cache_root() -> Path:
     return Path.home() / ".cache" / "radar"
 
 
-def repo_key(root: Path) -> str:
-    """Per-repo cache namespace. Filesystem key only (not a security boundary);
-    SHA-256 is used so static scanners don't flag the weaker SHA-1."""
-    return hashlib.sha256(str(root.resolve()).encode("utf-8")).hexdigest()[:16]
-
-
 def graph_cache_path(root: Path) -> Path:
-    """Deterministic graph cache file for a repo, outside that repo."""
-    return cache_root() / repo_key(root) / "graph.json"
+    """Deterministic cache file for a repo, outside that repo.
 
-
-def verdict_cache_path(root: Path, key: str) -> Path:
-    """AI-triage verdict cache file for a repo, outside that repo."""
-    return cache_root() / repo_key(root) / "triage" / f"{key}.json"
+    The hash is only a filesystem key (not a security boundary); SHA-256 is used
+    so static scanners don't flag the weaker SHA-1.
+    """
+    key = hashlib.sha256(str(root.resolve()).encode("utf-8")).hexdigest()[:16]
+    return cache_root() / key / "graph.json"

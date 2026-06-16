@@ -82,9 +82,8 @@ class ImportBinding:
 class RouteDef:
     method: str  # "GET", "POST", ...
     path: str  # "/api/login"
-    handler: str | None  # handler name (method name when handler_object is set; may be synthetic)
+    handler: str | None  # local function name handling the route (may be synthetic)
     line: int
-    handler_object: str | None = None  # receiver for `app.post(p, obj.method)` handlers
 
 
 @dataclass
@@ -95,7 +94,6 @@ class FileFacts:
     calls: list[CallSite] = field(default_factory=list)
     imports: list[ImportBinding] = field(default_factory=list)
     routes: list[RouteDef] = field(default_factory=list)
-    instantiations: dict = field(default_factory=dict)  # local var -> class name (`const x = new C()`)
 
 
 def node_to_dict(node: Node) -> dict:

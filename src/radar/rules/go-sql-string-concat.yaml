@@ -1,0 +1,25 @@
+rules:
+  - id: go-sql-string-concat
+    languages: [go]
+    severity: ERROR
+    message: >-
+      SQL query built with string concatenation allows SQL injection.
+      Use parameterized queries with ? placeholders: db.Query("SELECT ... WHERE id = ?", id).
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+      owasp: "A03:2021 - Injection"
+      confidence: MEDIUM
+      references:
+        - https://owasp.org/www-community/attacks/SQL_Injection
+    pattern-either:
+      - pattern: $DB.Query($A + $B, ...)
+      - pattern: $DB.QueryRow($A + $B, ...)
+      - pattern: $DB.Exec($A + $B, ...)
+      - pattern: $DB.QueryContext($CTX, $A + $B, ...)
+      - pattern: $DB.ExecContext($CTX, $A + $B, ...)
+      - patterns:
+          - pattern: $DB.$METHOD(fmt.Sprintf($FMT, ...), ...)
+          - metavariable-regex:
+              metavariable: $METHOD
+              regex: "^(Query|QueryRow|Exec|QueryContext|ExecContext)$"

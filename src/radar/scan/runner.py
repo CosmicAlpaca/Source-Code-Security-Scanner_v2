@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Literal
 
@@ -17,7 +18,7 @@ DOCKER_IMAGE = "semgrep/semgrep:latest"
 SEMGREP_PRESETS = ["p/security-audit", "p/secrets", "p/owasp-top-ten"]
 RULES_DIR = Path(__file__).resolve().parent.parent / "rules"
 
-Runtime = Literal["native", "docker"]
+Runtime = Literal["native", "native-module", "docker"]
 
 
 class ScanError(RuntimeError):
@@ -29,15 +30,31 @@ def rules_dir() -> Path:
     return RULES_DIR
 
 
+def _semgrep_module_available() -> bool:
+    """Check if `python -m semgrep` works (semgrep installed as package but not in PATH)."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "semgrep", "--version"],
+            capture_output=True, timeout=10,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def detect_runtime() -> Runtime:
-    """Prefer a native `semgrep`, else `docker`. Raise if neither is available."""
+    """Prefer native `semgrep` binary → `python -m semgrep` → Docker."""
     if shutil.which("semgrep"):
         return "native"
+    if _semgrep_module_available():
+        return "native-module"
     if shutil.which("docker"):
         return "docker"
     raise ScanError(
-        "No Semgrep runtime found. Install Semgrep (`pipx install semgrep`) "
-        "or Docker, then re-run `radar scan`."
+        "No Semgrep runtime found.\n"
+        "  Option 1 (recommended): pip install semgrep\n"
+        "  Option 2: install Docker Desktop and start it\n"
+        "Then re-run `radar scan`."
     )
 
 
@@ -61,9 +78,10 @@ def build_argv(
     presets = [] if rules_only else list(SEMGREP_PRESETS)
     extra = list(extra_config or [])
 
-    if runtime == "native":
+    if runtime in ("native", "native-module"):
         configs = presets + [str(rules_dir())] + extra
-        return ["semgrep", "scan", out_flag, "--metrics", "off", *_config_flags(configs), str(target)]
+        semgrep_cmd = ["semgrep"] if runtime == "native" else [sys.executable, "-m", "semgrep"]
+        return [*semgrep_cmd, "scan", out_flag, "--metrics", "off", *_config_flags(configs), str(target)]
 
     # docker: mount target + bundled rules read-only; -w /src + target "." so semgrep
     # emits repo-relative paths (matching native), not the /src container prefix.

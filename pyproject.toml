@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "security-radar"
-version = "0.1.0"
+version = "0.2.2"
 description = "Semgrep CI security scan + function-level impact graph (blast radius tracing)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,12 +17,17 @@ dependencies = [
     "tree-sitter-javascript>=0.23",
     "tree-sitter-typescript>=0.23",
     "tree-sitter-python>=0.23",
+    "tree-sitter-go>=0.23; python_version>='3.11'",
+    "tree-sitter-java>=0.23; python_version>='3.11'",
     "PyYAML>=6.0",
     "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+go = ["tree-sitter-go>=0.23"]
+java = ["tree-sitter-java>=0.23"]
+watch = ["watchdog>=3.0"]
 
 [project.scripts]
 radar = "radar.cli:main"

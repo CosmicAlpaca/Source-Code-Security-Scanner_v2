@@ -1,0 +1,22 @@
+rules:
+  - id: py-hardcoded-crypto-key
+    patterns:
+      - pattern-either:
+          - pattern: AES.new("$KEY", ...)
+          - pattern: AES.new(b"$KEY", ...)
+          - pattern: Fernet("$KEY")
+          - pattern: |
+              $KEY = "$VAL"
+              ...
+              AES.new($KEY, ...)
+          - pattern: HMAC.new(..., "$KEY", ...)
+    message: >
+      Hardcoded cryptographic key detected. Keys embedded in source code are
+      exposed to anyone with repository access. Store keys in environment
+      variables or a secrets manager (e.g. os.environ['AES_KEY']).
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-321: Use of Hard-coded Cryptographic Key"
+      owasp: "A02:2021 - Cryptographic Failures"

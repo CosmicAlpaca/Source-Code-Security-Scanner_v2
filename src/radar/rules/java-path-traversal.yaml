@@ -1,0 +1,23 @@
+rules:
+  - id: java-path-traversal
+    languages: [java]
+    severity: ERROR
+    message: >-
+      User-controlled value used to construct a file path — allows path traversal.
+      Normalize the path and verify it remains within the intended base directory.
+    metadata:
+      category: security
+      cwe: "CWE-22: Path Traversal"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.getParameter(...)
+      - pattern: $REQ.getHeader(...)
+      - pattern: $REQ.getPathInfo()
+    pattern-sinks:
+      - pattern: new File($PATH)
+      - pattern: new FileInputStream($PATH)
+      - pattern: new FileOutputStream($PATH)
+      - pattern: Paths.get($PATH, ...)
+      - pattern: Files.readAllBytes(Paths.get($PATH, ...))
