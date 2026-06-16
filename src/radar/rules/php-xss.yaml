@@ -11,9 +11,9 @@ rules:
       owasp: "A03:2021 - Injection"
       confidence: HIGH
     pattern-either:
-      - pattern: echo $_GET[...]
-      - pattern: echo $_POST[...]
-      - pattern: echo $_REQUEST[...]
-      - pattern: echo $_COOKIE[...]
-      - pattern: print($_GET[...])
-      - pattern: print($_POST[...])
+      - pattern: echo $_GET[$KEY]
+      - pattern: echo $_POST[$KEY]
+      - pattern: echo $_REQUEST[$KEY]
+      - pattern: echo $_COOKIE[$KEY]
+      - pattern: print($_GET[$KEY])
+      - pattern: print($_POST[$KEY])

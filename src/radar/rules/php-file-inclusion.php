@@ -3,7 +3,7 @@
 include($_GET['page']);
 
 // ruleid: php-file-inclusion
-require($_POST['module'] . '.php');
+require('pages/' . $_POST['module']);
 
 // ok: php-file-inclusion
 $allowed = ['home', 'about', 'contact'];
