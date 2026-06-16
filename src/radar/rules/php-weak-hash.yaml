@@ -1,0 +1,19 @@
+rules:
+  - id: php-weak-hash
+    languages: [php]
+    severity: WARNING
+    message: >-
+      MD5 or SHA1 used for password/secret hashing — cryptographically weak.
+      Use password_hash() with PASSWORD_BCRYPT or PASSWORD_ARGON2ID instead.
+    metadata:
+      category: security
+      cwe: "CWE-328: Use of Weak Hash"
+      owasp: "A02:2021 - Cryptographic Failures"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: md5($_GET[...])
+      - pattern: md5($_POST[...])
+      - pattern: sha1($_GET[...])
+      - pattern: sha1($_POST[...])
+      - pattern: md5($PASSWORD)
+      - pattern: sha1($PASSWORD)

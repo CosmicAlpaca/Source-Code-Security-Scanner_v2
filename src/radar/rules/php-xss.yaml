@@ -1,0 +1,19 @@
+rules:
+  - id: php-xss
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled value echoed without escaping — Cross-Site Scripting (XSS).
+      Use htmlspecialchars() or htmlentities() before outputting user input.
+    metadata:
+      category: security
+      cwe: "CWE-79: Cross-site Scripting"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    pattern-either:
+      - pattern: echo $_GET[...]
+      - pattern: echo $_POST[...]
+      - pattern: echo $_REQUEST[...]
+      - pattern: echo $_COOKIE[...]
+      - pattern: print($_GET[...])
+      - pattern: print($_POST[...])

@@ -1,0 +1,21 @@
+rules:
+  - id: php-file-inclusion
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled value in include/require — Remote/Local File Inclusion (RFI/LFI).
+      Use a whitelist of allowed file names; never include paths from user input.
+    metadata:
+      category: security
+      cwe: "CWE-98: PHP File Inclusion"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    pattern-either:
+      - pattern: include($_GET[...])
+      - pattern: include($_POST[...])
+      - pattern: include_once($_GET[...])
+      - pattern: require($_GET[...])
+      - pattern: require($_POST[...])
+      - pattern: require_once($_GET[...])
+      - pattern: include($F . $_GET[...])
+      - pattern: include($F . $_POST[...])

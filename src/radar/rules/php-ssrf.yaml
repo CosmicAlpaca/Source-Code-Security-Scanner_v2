@@ -1,0 +1,18 @@
+rules:
+  - id: php-ssrf
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled URL passed to cURL — Server-Side Request Forgery (SSRF).
+      Validate the URL against an allowlist of trusted domains before fetching.
+    metadata:
+      category: security
+      cwe: "CWE-918: SSRF"
+      owasp: "A10:2021 - Server-Side Request Forgery"
+      confidence: HIGH
+    pattern-either:
+      - pattern: curl_setopt($CH, CURLOPT_URL, $_GET[...])
+      - pattern: curl_setopt($CH, CURLOPT_URL, $_POST[...])
+      - pattern: curl_setopt($CH, CURLOPT_URL, $_REQUEST[...])
+      - pattern: file_get_contents($_GET['url'])
+      - pattern: file_get_contents($_POST['url'])

@@ -1,0 +1,25 @@
+rules:
+  - id: php-command-injection
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled input passed to a shell execution function — Command Injection.
+      Use escapeshellarg() / escapeshellcmd() or avoid shell calls entirely.
+    metadata:
+      category: security
+      cwe: "CWE-78: OS Command Injection"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    pattern-either:
+      - pattern: exec($_GET[...])
+      - pattern: exec($_POST[...])
+      - pattern: system($_GET[...])
+      - pattern: system($_POST[...])
+      - pattern: shell_exec($_GET[...])
+      - pattern: shell_exec($_POST[...])
+      - pattern: passthru($_GET[...])
+      - pattern: passthru($_POST[...])
+      - pattern: exec($Q . $_GET[...])
+      - pattern: exec($Q . $_POST[...])
+      - pattern: system($Q . $_GET[...])
+      - pattern: system($Q . $_POST[...])
