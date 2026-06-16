@@ -1,11 +1,11 @@
 <?php
 $name = $_GET['name'];
 // ruleid: php-xss
-echo $name;
+printf($name);
 
-$msg = $_POST['message'];
+$data = $_POST['debug'];
 // ruleid: php-xss
-print($msg);
+print_r($data);
 
 // ok: php-xss
-echo htmlspecialchars($_GET['name'], ENT_QUOTES, 'UTF-8');
+printf(htmlspecialchars($_GET['name'], ENT_QUOTES, 'UTF-8'));
