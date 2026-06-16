@@ -1,10 +1,15 @@
-app.post('/settings', (req, res) => {
+function merge(target, source) {
+  for (const key in source) {
     // ruleid: js-prototype-pollution
-    Object.assign(config, req.body);
-});
+    target[key] = source[key];
+  }
+}
 
-app.post('/safe', (req, res) => {
-    const { allowed_key } = req.body;
-    // ok: js-prototype-pollution
-    config.allowed_key = allowed_key;
-});
+function deepMerge(obj, payload) {
+  const key = payload.key;
+  // ruleid: js-prototype-pollution
+  obj[key] = payload.value;
+}
+
+// ok: js-prototype-pollution
+const safe = Object.assign({}, source);

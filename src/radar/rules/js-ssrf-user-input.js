@@ -1,23 +1,22 @@
 const express = require('express');
 const axios = require('axios');
-const https = require('https');
 const router = express.Router();
 
-// ruleid: js-ssrf-user-input
+// Case 1: fetch with user-controlled URL
 router.get('/proxy', async (req, res) => {
   const target = req.query.url;
+  // ruleid: js-ssrf-user-input
   const response = await fetch(target);
   res.send(await response.text());
 });
 
-// ruleid: js-ssrf-user-input
+// Case 2: axios with user-controlled endpoint
 router.post('/fetch', async (req, res) => {
-  const data = await axios.get(req.body.endpoint);
+  const endpoint = req.body.endpoint;
+  // ruleid: js-ssrf-user-input
+  const data = await axios.get(endpoint);
   res.json(data.data);
 });
 
 // ok: js-ssrf-user-input
-router.get('/safe', async (req, res) => {
-  const response = await fetch('https://api.example.com/data');
-  res.json(await response.json());
-});
+const data = await fetch('https://trusted-internal-api.local/data');

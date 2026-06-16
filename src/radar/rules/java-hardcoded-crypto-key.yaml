@@ -1,20 +1,16 @@
 rules:
   - id: java-hardcoded-crypto-key
-    languages: [java]
     severity: ERROR
-    message: >-
-      Cryptographic key is hardcoded as a string literal.
-      Load keys from environment variables or a key management system.
+    languages: [java]
+    message: >
+      Hardcoded cryptographic key detected. Embedding keys in source code
+      exposes them in version control. Use a key management service instead.
     metadata:
       category: security
-      cwe: "CWE-321: Hardcoded Cryptographic Key"
+      cwe: "CWE-321: Use of Hard-coded Cryptographic Key"
       owasp: "A02:2021 - Cryptographic Failures"
       confidence: HIGH
     pattern-either:
       - pattern: new SecretKeySpec("...".getBytes(), ...)
-      - pattern: new SecretKeySpec($VAR.getBytes(), ...) where $VAR == "..."
-      - patterns:
-          - pattern: new SecretKeySpec($BYTES, ...)
-          - pattern-inside: |
-              byte[] $BYTES = "...".getBytes(...);
-              ...
+      - pattern: new SecretKeySpec("...".getBytes($ENC), ...)
+      - pattern: new PBEKeySpec("...".toCharArray(), ...)

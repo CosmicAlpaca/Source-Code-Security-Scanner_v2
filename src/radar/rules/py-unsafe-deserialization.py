@@ -1,22 +1,22 @@
 import pickle
 import yaml
 
-# ruleid: py-pickle-loads
 def load_session(data: bytes):
+    # ruleid: py-pickle-loads
     return pickle.loads(data)
 
-# ruleid: py-yaml-unsafe-load
 def parse_config(content: str):
+    # ruleid: py-yaml-unsafe-load
     return yaml.load(content)
 
-# ruleid: py-yaml-unsafe-load
 def parse_config_v2(content: str):
+    # ruleid: py-yaml-unsafe-load
     return yaml.load(content, Loader=yaml.Loader)
 
-# ok: py-yaml-unsafe-load
 def parse_config_safe(content: str):
+    # ok: py-yaml-unsafe-load
     return yaml.safe_load(content)
 
-# ok: py-yaml-unsafe-load
 def parse_config_explicit(content: str):
+    # ok: py-yaml-unsafe-load
     return yaml.load(content, Loader=yaml.SafeLoader)

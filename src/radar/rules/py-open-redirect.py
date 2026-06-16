@@ -1,9 +1,10 @@
 from flask import redirect, request
 
-# ruleid: py-open-redirect
 def bad():
-    return redirect(request.args.get('next'))
+    url = request.args.get('next')
+    # ruleid: py-open-redirect
+    return redirect(url)
 
-# ok: py-open-redirect
 def good():
+    # ok: py-open-redirect
     return redirect('/dashboard')
