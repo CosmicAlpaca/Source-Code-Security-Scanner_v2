@@ -4,10 +4,39 @@ The field shape mirrors scripts/render-pr-comment.py (the CI renderer) so both
 read Semgrep the same way — keep them in sync.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 SEVERITY_ORDER = {"ERROR": 0, "WARNING": 1, "INFO": 2}
 FAIL_THRESHOLD = {"error": 0, "warning": 1, "info": 2}  # --fail-on choices
+
+# OWASP category by rule-name keyword. Shared by the HTML report and risk scoring
+# so both classify findings the same way. For preset/registry rules whose ids lack
+# these keywords, risk scoring prefers the semgrep `metadata.owasp` field instead.
+OWASP_MAP: dict[str, tuple[str, str]] = {
+    "sql":             ("A03", "Injection"),
+    "xss":             ("A03", "Injection"),
+    "eval":            ("A03", "Injection"),
+    "child-process":   ("A03", "Injection"),
+    "command":         ("A03", "Injection"),
+    "ssrf":            ("A10", "SSRF"),
+    "path-traversal":  ("A01", "Broken Access Control"),
+    "deserialization": ("A08", "Insecure Deserialization"),
+    "jwt":             ("A02", "Cryptographic Failures"),
+    "crypto":          ("A02", "Cryptographic Failures"),
+    "hash":            ("A02", "Cryptographic Failures"),
+    "flask":           ("A05", "Security Misconfiguration"),
+    "debug":           ("A05", "Security Misconfiguration"),
+    "secret":          ("A02", "Cryptographic Failures"),
+}
+
+
+def owasp_tag(rule: str) -> tuple[str, str]:
+    """(code, label) OWASP category from a rule id by keyword; ('A00','Other') if none."""
+    r = rule.lower()
+    for key, val in OWASP_MAP.items():
+        if key in r:
+            return val
+    return ("A00", "Other")
 
 
 @dataclass
@@ -17,6 +46,7 @@ class Finding:
     line: int
     rule: str
     message: str
+    metadata: dict = field(default_factory=dict)  # semgrep extra.metadata (owasp/cwe/…)
 
 
 def parse(report: dict) -> list[Finding]:
@@ -32,6 +62,7 @@ def parse(report: dict) -> list[Finding]:
                 line=result.get("start", {}).get("line", 0),
                 rule=result.get("check_id", "?"),
                 message=(extra.get("message") or "").strip(),
+                metadata=extra.get("metadata") or {},
             )
         )
     findings.sort(key=lambda f: (SEVERITY_ORDER[f.severity], f.path, f.line))

@@ -14,7 +14,9 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from radar.scan.findings import Finding, summary
+from radar.scan.findings import Finding, owasp_tag, summary
+
+_owasp_tag = owasp_tag  # shared classifier (defined in findings.py for reuse by risk scoring)
 
 MAX_MESSAGE = 200
 SEVERITY_STYLE = {"ERROR": "red", "WARNING": "yellow", "INFO": "blue"}
@@ -57,34 +59,9 @@ def to_json(findings: list[Finding]) -> str:
     return json.dumps(payload, indent=1, sort_keys=True)
 
 
-# ── OWASP category mapping ────────────────────────────────────────────────────
-_OWASP: dict[str, tuple[str, str]] = {
-    "sql":             ("A03", "Injection"),
-    "xss":             ("A03", "Injection"),
-    "eval":            ("A03", "Injection"),
-    "child-process":   ("A03", "Injection"),
-    "ssrf":            ("A10", "SSRF"),
-    "path-traversal":  ("A01", "Broken Access Control"),
-    "deserialization": ("A08", "Insecure Deserialization"),
-    "jwt":             ("A02", "Cryptographic Failures"),
-    "crypto":          ("A02", "Cryptographic Failures"),
-    "hash":            ("A02", "Cryptographic Failures"),
-    "flask":           ("A05", "Security Misconfiguration"),
-    "debug":           ("A05", "Security Misconfiguration"),
-    "secret":          ("A02", "Cryptographic Failures"),
-}
-
 _SEV_COLOR = {"ERROR": "#c0392b", "WARNING": "#d68910", "INFO": "#1a5276"}
 _SEV_BG    = {"ERROR": "#fdf2f2", "WARNING": "#fefaf0", "INFO": "#eaf4fb"}
 _SEV_BADGE = {"ERROR": "#e74c3c", "WARNING": "#f39c12", "INFO": "#3498db"}
-
-
-def _owasp_tag(rule: str) -> tuple[str, str]:
-    r = rule.lower()
-    for key, val in _OWASP.items():
-        if key in r:
-            return val
-    return ("A00", "Other")
 
 
 def _badge(text: str, color: str, bg: str = "white") -> str:
@@ -299,12 +276,99 @@ def _verdict_cell(entry: dict) -> str:
     except (TypeError, ValueError):
         conf_pct = "—"
     color = _EXPLOIT_COLOR.get(exploit, "#7f8c8d")
-    reasoning = _esc(v.get("reasoning", ""))[:300]
+    reason_txt = str(v.get("reasoning", ""))
+    path_txt = str(v.get("exploit_path", ""))
+    tip = (reason_txt + (" — path: " + path_txt if path_txt else ""))[:400]
+    reasoning = _esc(tip)
     return (
         '<span title="' + reasoning + '">'
         + _badge(_esc(exploit), color, "white")
         + ' <span style="color:#7f8c8d;font-size:11px">' + conf_pct + "</span></span>"
     )
+
+
+# ── Risk ranking (the output axis) ─────────────────────────────────────────────
+_BAND_COLOR = {
+    "critical": "#c0392b",
+    "high": "#d68910",
+    "medium": "#b7950b",
+    "low": "#7f8c8d",
+    "noise": "#95a5a6",
+}
+_SEV_RANK = {"ERROR": 0, "WARNING": 1, "INFO": 2}
+
+
+def _risk_cell(score) -> str:
+    """Risk badge `value band` with the contributing factors as a tooltip."""
+    color = _BAND_COLOR.get(score.band, "#7f8c8d")
+    title = _esc(" · ".join(score.factors))
+    return '<span title="' + title + '">' + _badge(str(score.value) + " " + score.band, color, "white") + "</span>"
+
+
+def _ranked_row(f: Finding, score, verdict_map: dict | None) -> str:
+    sev = f.severity
+    rule_short = f.rule.rsplit(".", 1)[-1]
+    oc, ol = _owasp_tag(rule_short)
+    cells = (
+        '<td style="padding:8px 12px;text-align:center">' + _risk_cell(score) + "</td>"
+        '<td style="padding:8px 12px;text-align:center">' + _badge(_esc(sev), _SEV_COLOR.get(sev, "#7f8c8d"), _SEV_BG.get(sev, "white")) + "</td>"
+        '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#2471a3">' + _esc(f.path) + ":" + str(f.line) + "</td>"
+        '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#6c3483">' + _esc(rule_short) + "</td>"
+        '<td style="padding:8px 12px">' + _owasp_chip(oc, ol) + "</td>"
+        '<td style="padding:8px 12px;font-size:13px">' + _esc(f.message[:160]) + "</td>"
+    )
+    if verdict_map is not None:
+        entry = verdict_map.get((f.path, f.line, f.rule), {})
+        cells += (
+            '<td style="padding:8px 12px">' + _reach_cell(entry) + "</td>"
+            '<td style="padding:8px 12px">' + _verdict_cell(entry) + "</td>"
+        )
+    return '<tr class="finding-row" data-sev="' + sev + '">' + cells + "</tr>\n"
+
+
+def _ranked_table(rows_html: str, verdict_map: dict | None) -> str:
+    extra = "<th>Reachability</th><th>AI verdict</th>" if verdict_map is not None else ""
+    return (
+        "<table><thead><tr>"
+        '<th style="width:110px">Risk</th><th style="width:90px">Severity</th>'
+        '<th style="width:200px">Location</th><th style="width:170px">Rule</th>'
+        '<th style="width:140px">OWASP</th><th>Message</th>' + extra
+        + '</tr></thead><tbody id="tbody">' + rows_html + "</tbody></table>"
+    )
+
+
+def _ranked_findings_html(findings: list[Finding], risk_map: dict, verdict_map: dict | None) -> str:
+    """Findings ranked by risk desc; band=noise folded into a collapsible section.
+
+    risk_map is keyed by object identity (id(finding)) so duplicate findings at the
+    same (path,line,rule) keep distinct scores.
+    """
+    ordered = sorted(
+        findings,
+        key=lambda f: (-risk_map[id(f)].value, _SEV_RANK.get(f.severity, 3), f.path, f.line),
+    )
+    main_rows = noise_rows = ""
+    noise_n = 0
+    for f in ordered:
+        score = risk_map[id(f)]
+        if score.band == "noise":
+            noise_rows += _ranked_row(f, score, verdict_map)
+            noise_n += 1
+        else:
+            main_rows += _ranked_row(f, score, verdict_map)
+
+    html_out = _ranked_table(main_rows, verdict_map) if main_rows else (
+        '<p style="padding:20px;color:#7f8c8d">No higher-risk findings — see folded low-risk below.</p>'
+        if noise_n else '<p style="padding:24px;color:#7f8c8d;text-align:center">✓ No findings — codebase looks clean!</p>'
+    )
+    if noise_n:
+        html_out += (
+            '<details style="margin-top:6px"><summary style="cursor:pointer;padding:10px 16px;'
+            'color:#7f8c8d;font-weight:600">▸ ' + str(noise_n)
+            + " low-risk / false-positive finding(s) (click to expand)</summary>"
+            + _ranked_table(noise_rows, verdict_map) + "</details>"
+        )
+    return html_out
 
 
 def _dashboard_rows(findings: list[Finding], verdict_map: dict | None) -> str:
@@ -351,8 +415,9 @@ def render_dashboard(
     traced_fn: str | None = None,
     history: list | None = None,
     verdict_map: dict | None = None,
+    risk_map: dict | None = None,
 ) -> str:
-    """One-file HTML dashboard: cards + findings (+optional AI triage cols) + blast radius + history."""
+    """One-file HTML dashboard: cards + risk-ranked findings (+optional AI triage cols) + blast radius + history."""
     history = history or []
     s = summary(findings)
     triage = verdict_map is not None
@@ -364,14 +429,18 @@ def render_dashboard(
         + _card(suppressed, "SUPPRESSED", "#7f8c8d", "#f4f6f7")
     )
 
-    extra_head = "<th>Reachability</th><th>AI verdict</th>" if triage else ""
-    table = (
-        "<table><thead><tr>"
-        '<th style="width:90px">Severity</th><th style="width:60px">Line</th>'
-        '<th style="width:180px">Rule</th><th style="width:140px">OWASP</th><th>Message</th>'
-        + extra_head
-        + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"
-    )
+    if risk_map is not None:
+        # Risk-ranked layout: findings sorted by risk desc, noise folded.
+        table = _ranked_findings_html(findings, risk_map, verdict_map)
+    else:
+        extra_head = "<th>Reachability</th><th>AI verdict</th>" if triage else ""
+        table = (
+            "<table><thead><tr>"
+            '<th style="width:90px">Severity</th><th style="width:60px">Line</th>'
+            '<th style="width:180px">Rule</th><th style="width:140px">OWASP</th><th>Message</th>'
+            + extra_head
+            + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"
+        )
 
     mermaid_section = ""
     if mermaid_src:

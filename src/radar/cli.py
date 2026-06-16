@@ -69,6 +69,34 @@ def _overlay_findings(root: Path, graph, result, *, rules_only: bool) -> None:
             item.findings = findings_by_node[item.id]
 
 
+def _build_risk_map(root: Path, graph, items, verdict_map: dict | None) -> dict:
+    """{(path,line,rule): RiskScore} for every finding. No API key required.
+
+    Reach comes from the AI-triage result when present, else from per-finding
+    reachability on the (already-built) call graph; falls back to 'unknown' when
+    the graph is unavailable so a score is always produced.
+    """
+    from radar.triage.reachability import Reach, reachability
+    from radar.triage.risk import risk_score
+
+    # Key by object identity, not (path,line,rule): Semgrep can emit several
+    # findings at the same location/rule and they must not collapse into one score.
+    risk_map: dict = {}
+    for f in items:
+        vkey = (f.path, f.line, f.rule)
+        verdict = None
+        if verdict_map and vkey in verdict_map:
+            entry = verdict_map[vkey]
+            reach = Reach(None, entry.get("routes") or [], entry.get("reach") or "unknown")
+            verdict = entry.get("verdict")
+        elif graph is not None:
+            reach = reachability(graph, f, root)
+        else:
+            reach = Reach(None, [], "unknown")
+        risk_map[id(f)] = risk_score(f, reach, verdict)
+    return risk_map
+
+
 @main.command()
 @click.option("--diff", "rev", default=None, help="Git revision to diff against (default: HEAD~1)")
 @click.option("--staged", is_flag=True, help="Use staged changes instead of a revision")
@@ -206,18 +234,28 @@ def scan(path, rules_only, extra, output_format, out_file, gate, fail_on) -> Non
 @click.option("--force", is_flag=True, help="Ignore cached verdicts and re-query the model")
 @click.option("--rules-only", is_flag=True, help="Skip registry presets — only bundled custom rules")
 @click.option("--config", "extra", multiple=True, help="Extra semgrep --config (repeatable)")
+@click.option("--top", type=click.IntRange(min=0), default=0, help="Show only the N highest-risk findings (0 = all)")
+@click.option("--fail-on", "fail_on", type=click.Choice(["exploitable", "likely"]), default=None,
+              help="Exit non-zero if any finding's AI verdict is at/above this (needs a key)")
+@click.option("--min-risk", "min_risk", type=click.IntRange(min=0, max=100), default=0,
+              help="Exit non-zero if any finding's risk score is ≥ N (works without a key)")
 @click.option("--format", "output_format", type=click.Choice(["terminal", "json"]),
               default="terminal", help="Output format")
-def triage(path, floor, only_all, dry_run, force, rules_only, extra, output_format) -> None:
-    """AI-triage Semgrep findings with impact-graph reachability.
+def triage(path, floor, only_all, dry_run, force, rules_only, extra, top, fail_on, min_risk, output_format) -> None:
+    """AI-triage Semgrep findings, ranked by risk (severity × reachability × class).
 
     Opt-in: sends a redacted code snippet per finding to OpenAI. Never alters
     `radar scan` output — this is an additive verdict layer. Needs OPENAI_API_KEY
     (env or a repo-root .env). Use --dry-run to preview exactly what would be sent.
+
+    Gate CI on the ranking: `--min-risk N` works offline; `--fail-on exploitable`
+    needs a key (it reads the AI verdict).
     """
+    from radar.scan.findings import SEVERITY_ORDER
     from radar.scan.runner import ScanError
     from radar.triage import engine, render
     from radar.triage.llm_client import TriageError
+    from radar.triage.risk import risk_score
 
     root = Path(path).resolve()
     try:
@@ -236,11 +274,60 @@ def triage(path, floor, only_all, dry_run, force, rules_only, extra, output_form
     if dry_run:
         console.print(f"[dim]dry-run: {len(results)} finding(s) prepared, 0 API calls.[/]")
         return
+
+    # Rank by risk desc (tie: severity, path, line) — the output axis.
+    risk_map = {id(tf): risk_score(tf.finding, tf.reach, tf.verdict) for tf in results}
+    results.sort(key=lambda tf: (
+        -risk_map[id(tf)].value, SEVERITY_ORDER.get(tf.finding.severity, 3),
+        tf.finding.path, tf.finding.line,
+    ))
+    hidden = 0
+    if top and top > 0:
+        hidden = max(0, len(results) - top)
+        results = results[:top]
+
     if output_format == "json":
-        click.echo(render.to_json_triage(results))
+        click.echo(render.to_json_triage(results, risk_map))
     else:
-        render.render_terminal_triage(results, console)
+        render.render_terminal_triage(results, console, risk_map)
+        if hidden:
+            console.print(f"[dim]… {hidden} lower-risk finding(s) hidden (--top {top}).[/]")
         console.print(f"[dim]{calls} API call(s) this run; the rest served from cache.[/]")
+
+    _triage_gate(results, risk_map, fail_on, min_risk)
+
+
+def _triage_gate(results, risk_map, fail_on, min_risk) -> None:
+    """Exit non-zero when ranking crosses a threshold; print the trigger first."""
+    _FAIL_RANK = {"exploitable": 0, "likely": 1}
+    if fail_on:
+        # Fail closed: if any verdict is missing (model error), a CI gate must not
+        # silently pass — we can't prove the finding is safe.
+        errored = [tf for tf in results if getattr(tf, "error", None)]
+        if errored:
+            console.print(
+                f"[red]✗ --fail-on {fail_on}:[/] {len(errored)} finding(s) have no AI verdict "
+                "(model unavailable) — cannot prove safe, failing closed."
+            )
+            sys.exit(2)
+        limit = _FAIL_RANK[fail_on]
+        for tf in results:
+            verd = (tf.verdict or {}).get("exploitability", "")
+            if verd in _FAIL_RANK and _FAIL_RANK[verd] <= limit:
+                console.print(
+                    f"[red]✗ --fail-on {fail_on}:[/] {tf.finding.path}:{tf.finding.line} "
+                    f"[{tf.finding.rule.rsplit('.', 1)[-1]}] → {verd}"
+                )
+                sys.exit(1)
+    if min_risk and min_risk > 0:
+        for tf in results:
+            score = risk_map[id(tf)]
+            if score.value >= min_risk:
+                console.print(
+                    f"[red]✗ --min-risk {min_risk}:[/] {tf.finding.path}:{tf.finding.line} "
+                    f"[{tf.finding.rule.rsplit('.', 1)[-1]}] → risk {score.value} ({score.band})"
+                )
+                sys.exit(1)
 
 
 @main.command()
@@ -418,6 +505,7 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
     # ── 2. Impact graph (blast radius) ───────────────────────────────────────
     mermaid_src = ""
     trace_label = None
+    graph = None
     console.print("[dim]② building call graph…[/]")
     try:
         from radar.config import load_config
@@ -446,13 +534,17 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
     except Exception as exc:
         console.print(f"[dim yellow]⚠ impact graph skipped: {exc}[/]")
 
-    # ── 3. History trend ─────────────────────────────────────────────────────
+    # ── 3. Risk ranking (the output axis; works with or without AI) ───────────
+    risk_map = _build_risk_map(root, graph, items, verdict_map)
+
+    # ── 4. History trend ─────────────────────────────────────────────────────
     history = load_history(path_filter=str(root), limit=20)
 
-    # ── 4. Render single-file HTML ───────────────────────────────────────────
+    # ── 5. Render single-file HTML ───────────────────────────────────────────
     html = render_dashboard(
         repo_path=str(root), findings=items, suppressed=len(suppressed),
-        mermaid_src=mermaid_src, traced_fn=trace_label, history=history, verdict_map=verdict_map,
+        mermaid_src=mermaid_src, traced_fn=trace_label, history=history,
+        verdict_map=verdict_map, risk_map=risk_map,
     )
     dest.write_text(html, encoding="utf-8")
 

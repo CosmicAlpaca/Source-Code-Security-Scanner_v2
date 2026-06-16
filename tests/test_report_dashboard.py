@@ -65,6 +65,32 @@ def test_verdict_cell_missing_verdict_is_dash():
     assert "—" in html and "unknown" in html
 
 
+# ── risk ranking layout ───────────────────────────────────────────────────────
+
+def test_dashboard_ranks_findings_by_risk_desc():
+    from radar.triage.risk import RiskScore
+    f_low = Finding(severity="INFO", path="a.py", line=1, rule="py-weak-hash", message="h")
+    f_high = Finding(severity="ERROR", path="b.py", line=2, rule="py-sql", message="s")
+    rm = {id(f_low): RiskScore(20, "low", ["INFO"]),
+          id(f_high): RiskScore(95, "critical", ["ERROR"])}
+    html = render_dashboard("repo", [f_low, f_high], suppressed=0, risk_map=rm)
+    assert ">Risk<" in html
+    assert "95 critical" in html and "20 low" in html
+    # higher risk renders before lower risk regardless of input order
+    assert html.index("b.py:2") < html.index("a.py:1")
+
+
+def test_dashboard_folds_noise_into_details():
+    from radar.triage.risk import RiskScore
+    keep = Finding(severity="ERROR", path="a.py", line=1, rule="py-sql", message="s")
+    junk = Finding(severity="INFO", path="b.py", line=9, rule="py-x", message="m")
+    rm = {id(keep): RiskScore(90, "critical", ["ERROR"]),
+          id(junk): RiskScore(5, "noise", ["INFO", "ai:false_positive"])}
+    html = render_dashboard("repo", [keep, junk], suppressed=0, risk_map=rm)
+    assert "<details" in html
+    assert "1 low-risk / false-positive finding(s)" in html
+
+
 # ── report CLI ────────────────────────────────────────────────────────────────
 
 def _patch_scan(monkeypatch):
