@@ -7,9 +7,11 @@ import (
 
 func bad(r *http.Request) {
 	name := r.URL.Query().Get("file")
-	exec.Command("ls", name).Run() // ruleid: go-command-injection
+	// ruleid: go-command-injection
+	exec.Command("ls", name).Run()
 }
 
 func good(r *http.Request) {
-	exec.Command("ls", "-la", "/safe/path").Run() // ok: go-command-injection
+	// ok: go-command-injection
+	exec.Command("ls", "-la", "/safe/path").Run()
 }

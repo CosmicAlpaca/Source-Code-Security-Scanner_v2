@@ -1,9 +1,9 @@
 import java.io.*;
 
-class Bad {
-    // ruleid: java-unsafe-deserialization
+class TestDeser {
     void bad(InputStream is) throws Exception {
         ObjectInputStream ois = new ObjectInputStream(is);
-        Object obj = ois.readObject();
+        // ruleid: java-unsafe-deserialization
+        ois.readObject();
     }
 }

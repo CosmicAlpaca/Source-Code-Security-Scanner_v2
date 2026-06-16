@@ -1,12 +1,14 @@
 import javax.servlet.http.*;
 
-class Bad {
+class TestOpenRedirect {
     void bad(HttpServletRequest req, HttpServletResponse resp) throws Exception {
         String url = req.getParameter("next");
-        resp.sendRedirect(url); // ruleid: java-open-redirect
+        // ruleid: java-open-redirect
+        resp.sendRedirect(url);
     }
 
     void good(HttpServletResponse resp) throws Exception {
-        resp.sendRedirect("/dashboard"); // ok: java-open-redirect
+        // ok: java-open-redirect
+        resp.sendRedirect("/dashboard");
     }
 }

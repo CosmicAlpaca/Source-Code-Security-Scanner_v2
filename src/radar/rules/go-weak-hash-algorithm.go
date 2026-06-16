@@ -5,12 +5,12 @@ import (
 	"crypto/sha1"
 )
 
-// ruleid: go-weak-hash-algorithm
 func bad1(data []byte) {
+	// ruleid: go-weak-hash-algorithm
 	md5.Sum(data)
 }
 
-// ruleid: go-weak-hash-algorithm
-func bad2(data []byte) {
+func bad2() {
+	// ruleid: go-weak-hash-algorithm
 	sha1.New()
 }

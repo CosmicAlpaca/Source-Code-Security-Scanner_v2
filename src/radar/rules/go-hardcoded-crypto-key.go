@@ -6,17 +6,17 @@ import (
 	"crypto/sha256"
 )
 
-// ruleid: go-hardcoded-crypto-key
 func bad1() {
+	// ruleid: go-hardcoded-crypto-key
 	hmac.New(sha256.New, []byte("super-secret-key-hardcoded"))
 }
 
-// ruleid: go-hardcoded-crypto-key
 func bad2() {
+	// ruleid: go-hardcoded-crypto-key
 	aes.NewCipher([]byte("hardcoded-aes-key"))
 }
 
-// ok: go-hardcoded-crypto-key
 func good(key []byte) {
+	// ok: go-hardcoded-crypto-key
 	hmac.New(sha256.New, key)
 }

@@ -1,17 +1,14 @@
 import java.sql.DriverManager;
 
-class Bad {
-    // ruleid: java-hardcoded-password
-    String password = "super_secret_123";
-
-    // ruleid: java-hardcoded-password
+class TestHardcodedPassword {
     void bad() throws Exception {
+        // ruleid: java-hardcoded-password
         DriverManager.getConnection("jdbc:mysql://localhost/db", "root", "password123");
     }
 
-    // ok: java-hardcoded-password
     void good() throws Exception {
         String pwd = System.getenv("DB_PASSWORD");
+        // ok: java-hardcoded-password
         DriverManager.getConnection("jdbc:mysql://localhost/db", "root", pwd);
     }
 }

@@ -1,16 +1,16 @@
 import javax.xml.parsers.DocumentBuilderFactory;
 
-class Bad {
-    // ruleid: java-xxe
+class TestXxe {
     void bad() throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        // ruleid: java-xxe
         factory.newDocumentBuilder();
     }
 
-    // ok: java-xxe
     void good() throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        // ok: java-xxe
         factory.newDocumentBuilder();
     }
 }
