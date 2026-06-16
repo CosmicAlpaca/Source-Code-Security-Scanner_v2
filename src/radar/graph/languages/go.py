@@ -188,7 +188,7 @@ class GoExtractor(LanguageExtractor):
             return
         source = _string_value(path_node) or ""
         # Local name: explicit alias, or last path segment
-        if name_node is not None and name_node.type == "identifier":
+        if name_node is not None and name_node.type in ("identifier", "package_identifier"):
             local = _text(name_node)
         else:
             local = source.rsplit("/", 1)[-1]

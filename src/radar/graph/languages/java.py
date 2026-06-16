@@ -109,19 +109,15 @@ class JavaExtractor(LanguageExtractor):
         return self._on_method_declaration(node, facts, func_stack, class_name)
 
     def _collect_annotations(self, method_node) -> list:
-        """Collect annotation nodes that are preceding siblings of the method in its parent."""
-        parent = method_node.parent
-        if parent is None:
-            return []
+        """Annotations live inside the method's own `modifiers` child node."""
         annotations = []
-        for child in parent.children:
-            if child == method_node:
+        for child in method_node.children:
+            if child.type == "modifiers":
+                annotations.extend(
+                    m for m in child.children
+                    if m.type in ("annotation", "marker_annotation")
+                )
                 break
-            if child.type in ("annotation", "marker_annotation"):
-                annotations.append(child)
-            elif child.type not in ("annotation", "marker_annotation", "modifiers"):
-                # Reset on non-annotation nodes (other methods, fields)
-                annotations = []
         return annotations
 
     def _resolve_route(self, annotations: list) -> tuple[str | None, str | None]:

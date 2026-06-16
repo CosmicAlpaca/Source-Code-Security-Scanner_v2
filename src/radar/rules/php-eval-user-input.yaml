@@ -1,0 +1,20 @@
+rules:
+  - id: php-eval-user-input
+    languages: [php]
+    severity: ERROR
+    message: >-
+      User-controlled data reaches eval() — arbitrary PHP code execution.
+      Never eval() request data; redesign to avoid dynamic code.
+    metadata:
+      category: security
+      cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET
+      - pattern: $_POST
+      - pattern: $_REQUEST
+      - pattern: $_COOKIE
+    pattern-sinks:
+      - pattern: eval(...)
