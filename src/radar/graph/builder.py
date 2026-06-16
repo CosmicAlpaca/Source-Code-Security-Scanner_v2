@@ -13,7 +13,7 @@ import networkx as nx
 from radar.graph.languages import extractor_for
 from radar.graph.model import Edge, FileFacts, Node, edge_to_dict, node_to_dict
 
-GRAPH_VERSION = 1
+GRAPH_VERSION = 2  # bump when builder changes graph shape → invalidates old caches
 SKIP_DIRS = {
     "node_modules", ".git", "dist", "build", "out", "coverage",
     ".venv", "venv", "__pycache__", ".radar", ".tox", ".next",
@@ -97,7 +97,11 @@ def save_graph(graph: nx.DiGraph, out_path: Path) -> None:
 
 def load_graph(path: Path) -> nx.DiGraph:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    graph = nx.DiGraph(head=payload.get("head"), stats=payload.get("stats", {}))
+    graph = nx.DiGraph(
+        head=payload.get("head"),
+        version=payload.get("version"),
+        stats=payload.get("stats", {}),
+    )
     for node in payload["nodes"]:
         graph.add_node(node["id"], **node)
     for edge in payload["edges"]:

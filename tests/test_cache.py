@@ -65,6 +65,56 @@ def test_impact_not_found_emits_valid_machine_format(tmp_path):
     assert "No function named 'doesNotExist'" in term.stdout + term.stderr
 
 
+def _seed_cache(repo: Path, *, version, head="deadbeef", marker="SEED::marker"):
+    """Write a hand-crafted cache graph with a chosen version + head + marker node."""
+    cache_path = cache.graph_cache_path(repo)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": version,
+        "head": head,
+        "stats": {},
+        "nodes": [{"id": marker, "kind": "function", "name": "marker"}],
+        "edges": [],
+    }
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+    return cache_path
+
+
+def test_stale_version_cache_is_rebuilt(monkeypatch, tmp_path):
+    """A cache from an OLDER builder version is stale even if repo HEAD is unchanged."""
+    from radar.graph import builder
+
+    repo = tmp_path / "ext-repo"
+    shutil.copytree(JS_FIXTURE, repo)
+    monkeypatch.setenv("RADAR_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setattr(builder, "git_head", lambda root: "deadbeef")  # pin HEAD
+
+    cache_path = _seed_cache(repo, version=builder.GRAPH_VERSION - 1, marker="STALE::marker")
+
+    graph = _load_or_build_graph(repo)
+
+    assert "STALE::marker" not in graph.nodes      # stale cache discarded
+    assert graph.number_of_nodes() > 1             # real graph rebuilt from source
+    reloaded = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert reloaded["version"] == builder.GRAPH_VERSION  # cache restamped to current
+
+
+def test_fresh_version_cache_is_reused(monkeypatch, tmp_path):
+    """Matching HEAD + current version → cache reused, no rebuild."""
+    from radar.graph import builder
+
+    repo = tmp_path / "ext-repo"
+    shutil.copytree(JS_FIXTURE, repo)
+    monkeypatch.setenv("RADAR_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setattr(builder, "git_head", lambda root: "deadbeef")
+
+    _seed_cache(repo, version=builder.GRAPH_VERSION, marker="SEED::marker")
+
+    graph = _load_or_build_graph(repo)
+
+    assert "SEED::marker" in graph.nodes  # returned the seeded graph as-is, did not rebuild
+
+
 def test_graph_override_skips_build(tmp_path):
     """--graph loads the given file and never builds/caches."""
     from radar.graph.builder import build_graph, save_graph
