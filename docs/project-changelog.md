@@ -2,6 +2,25 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
+## [Unreleased] — AI Risk Ranking
+
+Biến AI triage (trước đây là 1 cột thụ động, ẩn sau API key) thành **trục tổ chức output**: một **Risk Score 0–100 luôn tính được** (deterministic, không cần key) sắp xếp lại findings; AI verdict là lớp **nâng cấp** thứ hạng, không phải cột rời.
+
+### Added
+
+- **`triage/risk.py`** — `risk_score(finding, reach, verdict)` = `severity × reachability × OWASP-class`, cap 0–100, band `critical/high/medium/low/noise` + `factors` minh bạch. Thuần stdlib, không cần network/key.
+- **`radar report` Risk Ranking** — cột **Risk** + sort theo risk giảm dần; finding `noise`/`false_positive` gấp vào `<details>` (không xoá). Chạy được **offline** nhờ reachability từ call graph đã dựng sẵn.
+- **`radar triage` gate** — `--top N` (chỉ N rủi ro nhất), `--min-risk N` (exit≠0 khi risk ≥ N, **không cần key**), `--fail-on exploitable|likely` (exit≠0 theo verdict AI, cần key). JSON thêm object `risk:{value,band,factors}` (additive).
+- **Verdict enrichment** — prompt nhận thêm OWASP/CWE class; verdict thêm field `exploit_path` (1 câu mô tả đường đi). Cache version `v2` (vô hiệu entry cũ thiếu field).
+
+### Changed
+
+- **`scan/findings.py`** — `Finding` thêm `metadata` (giữ `extra.metadata` của Semgrep); `OWASP_MAP`/`owasp_tag` chuyển từ `scan/report.py` về đây để dùng chung (DRY) cho cả report lẫn risk scoring.
+
+### Tests
+
+- +24 test (`test_risk.py`, `test_triage_ranking.py`, mở rộng dashboard/prompt). Toàn bộ **217 pass**.
+
 ## [0.2.1] — 2026-06-10
 
 Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) DoD) + dọn nợ hygiene và sửa các finding tự-quét.

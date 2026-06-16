@@ -19,7 +19,8 @@ from radar.triage.prompt import build_messages
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _EXPLOITABILITY = {"exploitable", "likely", "unlikely", "false_positive"}
-_VERDICT_KEYS = ("exploitability", "confidence", "reasoning", "reachable")
+_VERDICT_KEYS = ("exploitability", "confidence", "reasoning", "exploit_path", "reachable")
+_CACHE_VERSION = "v2"  # bump when prompt/verdict schema changes to invalidate stale entries
 
 
 class TriageError(RuntimeError):
@@ -54,7 +55,7 @@ def resolve_base_url() -> str:
 
 
 def cache_key(model: str, finding, snippet: str, status: str) -> str:
-    blob = f"{model}\0{finding.rule}\0{finding.path}:{finding.line}\0{status}\0{snippet}"
+    blob = f"{_CACHE_VERSION}\0{model}\0{finding.rule}\0{finding.path}:{finding.line}\0{status}\0{snippet}"
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 
 
@@ -67,6 +68,7 @@ def _normalize(verdict: dict) -> dict:
     except (TypeError, ValueError):
         out["confidence"] = 0.0
     out["reasoning"] = str(out.get("reasoning") or "").strip()
+    out["exploit_path"] = str(out.get("exploit_path") or "").strip()
     out["reachable"] = bool(out.get("reachable"))
     return out
 

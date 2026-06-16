@@ -41,13 +41,30 @@ def _reach_cell(reach) -> str:
     return "[dim]unknown[/]"
 
 
-def render_terminal_triage(results, console: Console | None = None) -> None:
+BAND_STYLE = {
+    "critical": "bold red",
+    "high": "yellow",
+    "medium": "cyan",
+    "low": "dim",
+    "noise": "dim strike",
+}
+
+
+def _risk_cell(score) -> str:
+    if score is None:
+        return ""
+    style = BAND_STYLE.get(score.band, "white")
+    return f"[{style}]{score.value}[/] [dim]{score.band}[/]"
+
+
+def render_terminal_triage(results, console: Console | None = None, risk_map: dict | None = None) -> None:
     console = console or Console()
     if not results:
         console.print("[green]✓ No findings to triage.[/]")
         return
 
     table = Table(show_lines=False, expand=False)
+    table.add_column("Risk")
     table.add_column("Sev")
     table.add_column("Location", style="cyan", no_wrap=True)
     table.add_column("Rule", style="magenta")
@@ -62,7 +79,9 @@ def render_terminal_triage(results, console: Console | None = None) -> None:
             why = f"[dim]{escape(tf.error[:MAX_REASON])}[/]"
         else:
             why = ""
+        score = risk_map.get(id(tf)) if risk_map else None
         table.add_row(
+            _risk_cell(score),
             SEVERITY_EMOJI.get(f.severity, ""),
             escape(f"{f.path}:{f.line}"),
             escape(f.rule.rsplit(".", 1)[-1]),
@@ -73,7 +92,7 @@ def render_terminal_triage(results, console: Console | None = None) -> None:
     console.print(table)
 
 
-def to_json_triage(results) -> str:
+def to_json_triage(results, risk_map: dict | None = None) -> str:
     findings = []
     for tf in results:
         f = tf.finding
@@ -85,6 +104,9 @@ def to_json_triage(results) -> str:
             "message": f.message,
             "reachability": {"status": tf.reach.status, "routes": tf.reach.routes},
         }
+        score = risk_map.get(id(tf)) if risk_map else None
+        if score is not None:
+            obj["risk"] = {"value": score.value, "band": score.band, "factors": score.factors}
         if tf.verdict:
             obj["ai"] = {**tf.verdict, "cached": tf.cached}
         elif tf.error:
