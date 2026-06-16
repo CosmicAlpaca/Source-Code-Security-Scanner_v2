@@ -1,0 +1,20 @@
+rules:
+  - id: js-prototype-pollution
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Merging or assigning user-controlled objects without key sanitization
+      can pollute Object.prototype and affect all objects in the application.
+      Check for __proto__, constructor, and prototype keys before merging.
+    metadata:
+      category: security
+      cwe: "CWE-1321: Prototype Pollution"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: Object.assign($TARGET, $REQ.body)
+      - pattern: Object.assign($TARGET, $REQ.query)
+      - pattern: $LIB.merge($TARGET, $REQ.body)
+      - pattern: $LIB.merge($TARGET, $REQ.query)
+      - pattern: $LIB.extend($TARGET, $REQ.body)
+      - pattern: $LIB.defaultsDeep($TARGET, $REQ.body)
