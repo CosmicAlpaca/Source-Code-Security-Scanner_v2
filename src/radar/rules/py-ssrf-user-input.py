@@ -4,21 +4,21 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-# ruleid: py-ssrf-user-input
 @app.route('/proxy')
 def proxy():
     url = request.args.get('url')
+    # ruleid: py-ssrf-user-input
     resp = requests.get(url)
     return resp.text
 
-# ruleid: py-ssrf-user-input
 @app.route('/fetch', methods=['POST'])
 def fetch_url():
     endpoint = request.json['endpoint']
+    # ruleid: py-ssrf-user-input
     return requests.post(endpoint).text
 
-# ok: py-ssrf-user-input
 @app.route('/safe')
 def safe():
+    # ok: py-ssrf-user-input
     resp = requests.get('https://api.example.com/data')
     return resp.json()

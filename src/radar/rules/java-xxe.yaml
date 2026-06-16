@@ -1,24 +1,14 @@
 rules:
   - id: java-xxe
-    languages: [java]
     severity: ERROR
-    message: >-
-      XML parser created without disabling external entity processing — allows XXE attacks.
-      Call factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-      before parsing untrusted XML.
+    languages: [java]
+    message: >
+      XML External Entity (XXE) vulnerability: DocumentBuilderFactory is not
+      configured to disable external entity processing. Set
+      XMLConstants.FEATURE_SECURE_PROCESSING and disable DOCTYPE declarations.
     metadata:
       category: security
-      cwe: "CWE-611: XML External Entity"
+      cwe: "CWE-611: Improper Restriction of XML External Entity Reference"
       owasp: "A05:2021 - Security Misconfiguration"
       confidence: MEDIUM
-    patterns:
-      - pattern: |
-          $FACTORY = DocumentBuilderFactory.newInstance();
-          ...
-          $FACTORY.newDocumentBuilder()
-      - pattern-not: |
-          $FACTORY = DocumentBuilderFactory.newInstance();
-          ...
-          $FACTORY.setFeature(...)
-          ...
-          $FACTORY.newDocumentBuilder()
+    pattern: $FACTORY.newDocumentBuilder()

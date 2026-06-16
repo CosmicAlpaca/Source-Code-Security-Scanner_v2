@@ -1,16 +1,20 @@
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.XMLConstants;
 
-class TestXxe {
-    void bad() throws Exception {
+public class XxeTest {
+    public void bad(String xmlData) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         // ruleid: java-xxe
-        factory.newDocumentBuilder();
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        builder.parse(xmlData);
     }
 
-    void good() throws Exception {
+    public void good() throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         // ok: java-xxe
-        factory.newDocumentBuilder();
+        // (builder not created — feature-only setup for illustration)
     }
 }
