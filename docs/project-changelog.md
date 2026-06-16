@@ -2,35 +2,6 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
-## [0.4.0] — 2026-06-11
-
-Lệnh mới `radar triage` — AI đọc finding cùng reachability từ impact graph để phân loại exploitable vs false-positive. Lớp phụ, opt-in, không đổi `radar scan`/SARIF/exit code.
-
-### Added
-
-- **`feat(triage)` — `radar triage`**: với mỗi finding Semgrep, dựng reachability (finding → hàm bao quanh → route nào chạm tới, **tái dùng `impact.tracer.trace().apis`** — không thêm traversal) rồi gọi OpenAI Chat Completions (temp=0, JSON) trả verdict `{exploitability, confidence, reasoning, reachable}`.
-- **Reachability best-effort**: `reachable` = có route untrusted tới; `unknown` ≠ code chết (prompt dặn model không hạ severity vì `unknown`).
-- **Privacy & opt-in**: chỉ chạy khi gọi `radar triage`; gửi snippet quanh dòng lỗi (không gửi cả repo), **che secret** trước khi đi; `--dry-run` in payload trước; verdict cache *ngoài repo* (`sha256(model+finding+snippet+status)`) → re-run = cùng verdict, 0 call thừa.
-- **Cấu hình qua env/`.env`** (stdlib parse, **không thêm dependency**): `OPENAI_API_KEY`/`RADAR_AI_API_KEY`, `RADAR_AI_MODEL` (mặc định `gpt-4o-mini`), `OPENAI_BASE_URL` (swap Azure/proxy/Ollama). Thêm `.env.example`.
-- **Output additive**: terminal thêm cột `Reach`/`AI verdict`/`Why`; `--format json` thêm block `reachability` + `ai` mỗi finding (field deterministic giữ nguyên — backward compatible).
-- Module `src/radar/triage/{reachability,prompt,llm_client,engine,render}.py` + helper `cache.repo_key`/`verdict_cache_path`; 18 test mới (reachability, redaction, cache-hit-no-network, orchestration, render).
-
-## [0.3.0] — 2026-06-10
-
-Impact graph chạy được trên Express app thật (handler-object pattern), phát hiện qua live test OWASP NodeGoat.
-
-### Added
-
-- **`feat(impact)` — handler-object route→handler**: resolve `app.METHOD(path, instance.method)` với
-  `const instance = new Class()` → cạnh `handles` route→method def (cùng/khác file qua import), confidence `resolved`.
-- **`new Class()` → cạnh `calls`** tới class → constructor/handler-class có dependent (blast radius khác rỗng).
-- Receiver→class resolution dùng chung cho cả method call `obj.m()` lẫn route handler.
-- Fixture `tests/fixtures/express-handler-object/` + 3 test regression.
-
-### Fixed
-
-- NodeGoat: `radar impact --function handleLoginRequest` **trước = 0 APIs → nay = POST /login**. Demo app không regression.
-
 ## [0.2.1] — 2026-06-10
 
 Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) DoD) + dọn nợ hygiene và sửa các finding tự-quét.

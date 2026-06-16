@@ -1,0 +1,21 @@
+rules:
+  - id: js-open-redirect
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      User-controlled URL passed to res.redirect() — allows open redirect attacks.
+      Validate the redirect target against an allowlist of trusted paths or domains.
+    metadata:
+      category: security
+      cwe: "CWE-601: Open Redirect"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.query.$FIELD
+      - pattern: $REQ.query[$FIELD]
+      - pattern: $REQ.body.$FIELD
+      - pattern: $REQ.params.$FIELD
+    pattern-sinks:
+      - pattern: $RES.redirect($URL)
+      - pattern: $RES.redirect($STATUS, $URL)

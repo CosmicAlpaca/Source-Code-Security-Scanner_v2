@@ -1,0 +1,18 @@
+rules:
+  - id: py-open-redirect
+    languages: [python]
+    severity: WARNING
+    message: >-
+      User-controlled value passed to redirect() — allows open redirect attacks.
+      Validate the URL is a relative path or belongs to a trusted domain.
+    metadata:
+      category: security
+      cwe: "CWE-601: Open Redirect"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: redirect(request.args.get(...))
+      - pattern: redirect(request.args[...])
+      - pattern: redirect(request.form.get(...))
+      - pattern: RedirectResponse(request.query_params.get(...))
+      - pattern: RedirectResponse(request.query_params[...])

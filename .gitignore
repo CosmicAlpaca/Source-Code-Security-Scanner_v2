@@ -428,3 +428,6 @@ analysis_results/
 
 # Browser-automation snapshots (verification evidence)
 .playwright-mcp/
+
+# Sandboxed pytest cache dirs (accidental)
+pytest-cache-files-*/

@@ -22,10 +22,10 @@ scripts/render-pr-comment.py          # stdlib-only: semgrep.json [+ impact.json
 radar.config.yml                      # feature map (glob -> feature) + exclude globs
 
 src/radar/
-├── cli.py                            # `radar build` | `radar impact` | `radar scan` | `radar triage`
+├── cli.py                            # `radar build` | `radar impact` | `radar scan`
 ├── config.py                         # RadarConfig: feature_for / is_excluded (yaml.safe_load)
-├── cache.py                          # repo_key + graph_cache_path + verdict_cache_path (cache ngoài repo)
-├── rules/                            # 6 custom Semgrep rules + fixtures (đóng gói trong wheel)
+├── cache.py                          # graph_cache_path: cache ngoài repo (zero-footprint impact)
+├── rules/                            # 5 custom Semgrep rules + fixtures (đóng gói trong wheel)
 ├── scan/
 │   ├── runner.py                     # detect_runtime (native→docker) + run_semgrep (zero-footprint)
 │   ├── findings.py                   # semgrep JSON -> Finding[] + summary + threshold gate
@@ -41,16 +41,10 @@ src/radar/
 ├── impact/
 │   ├── diff_mapper.py                # git diff -U0 -> changed lines -> enclosing function
 │   └── tracer.py                     # reverse BFS -> ImpactResult
-├── report/
-│   ├── terminal.py                   # rich tree
-│   ├── exporters.py                  # JSON / Mermaid / HTML
-│   └── templates/impact.html.j2      # Jinja2 (autoescape) HTML report
-└── triage/                           # AI triage (opt-in): scan + reachability -> LLM verdict
-    ├── reachability.py               # finding -> hàm bao quanh -> route (tái dùng tracer.trace)
-    ├── prompt.py                     # build_messages + secret redaction
-    ├── llm_client.py                 # OpenAI qua urllib + verdict cache + .env loader (no SDK)
-    ├── engine.py                     # orchestrate scan->reach->verdict, floor/dry-run/force
-    └── render.py                     # cột AI additive (terminal + json), không đổi field deterministic
+└── report/
+    ├── terminal.py                   # rich tree
+    ├── exporters.py                  # JSON / Mermaid / HTML
+    └── templates/impact.html.j2      # Jinja2 (autoescape) HTML report
 ```
 
 ## 3. Node / Edge schema
@@ -101,20 +95,8 @@ Node id luôn dùng posix path: `"<relpath>::<name>"`.
 ## 5c. Zero-footprint & graph cache
 
 - **scan**: Semgrep emit ra stdout, không tạo file trong repo đích. Docker mount read-only.
-- **impact**: auto-build ghi `graph.json` vào **cache ngoài repo** (`cache.py`): `$RADAR_CACHE` → `%LOCALAPPDATA%/radar/cache` (Windows) → `~/.cache/radar`, key = `sha256(repo_path)[:16]` (`cache.repo_key`). Nhờ vậy `radar impact --path <repo-khác>` không để lại `.radar/` trong repo đó.
+- **impact**: auto-build ghi `graph.json` vào **cache ngoài repo** (`cache.py`): `$RADAR_CACHE` → `%LOCALAPPDATA%/radar/cache` (Windows) → `~/.cache/radar`, key = `sha1(repo_path)[:16]`. Nhờ vậy `radar impact --path <repo-khác>` không để lại `.radar/` trong repo đó.
 - **build** (explicit): vẫn ghi `<repo>/.radar/graph.json` như cũ (chủ ý — index repo này), `--out` để đổi đích.
-- **triage**: verdict cache ở `verdict_cache_path(root, key)` = `<cache>/<repo_key>/triage/<key>.json`, cùng cây cache — cũng zero-footprint trên repo đích.
-
-## 5d. Data flow — `radar triage` (opt-in, AI)
-
-1. **load_dotenv** + scan (`run_semgrep`) → `Finding[]`; lọc theo `--floor` (mặc định WARNING) trừ khi `--all`.
-2. **graph** qua `_load_or_build_graph` (tái dùng cache zero-footprint của impact).
-3. Mỗi finding: **reachability** = `enclosing_function(finding)` → `tracer.trace([fid]).apis` → route reach tới (best-effort: không route ≠ chết).
-4. **prompt**: snippet ±6 dòng → `redact` (che secret) → `build_messages` (kèm reachability + dặn model `unknown` không phải an toàn).
-5. `--dry-run`: in payload, **0 call**. Ngược lại `get_verdict`: cache hit (0 mạng) hoặc gọi OpenAI (temp=0, `response_format=json_object`) rồi ghi cache.
-6. **render** additive: terminal cột `Reach/AI verdict/Why`; json thêm `reachability`+`ai` (field deterministic giữ nguyên). **Không đụng** exit code / SARIF / output của `radar scan`.
-
-Khoá API: `OPENAI_API_KEY`/`RADAR_AI_API_KEY` (env → `.env` gốc repo, `.env` đã gitignore). Provider sau `OPENAI_BASE_URL` → swap Azure/proxy/Ollama không sửa code.
 
 ## 6. Plugin contract
 

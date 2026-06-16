@@ -1,0 +1,19 @@
+rules:
+  - id: java-unsafe-deserialization
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Java native deserialization via ObjectInputStream.readObject() can lead to
+      Remote Code Execution if the data is attacker-controlled.
+      Use a safe serialization format (JSON, Protobuf) or implement a deserialization filter.
+    metadata:
+      category: security
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: new ObjectInputStream(...).readObject()
+      - pattern: $OIS.readObject()
+      - patterns:
+          - pattern: $OIS = new ObjectInputStream(...)
+          - pattern: $OIS.readObject()
