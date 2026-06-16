@@ -6,6 +6,7 @@ import (
 )
 
 func bad(r *http.Request) {
+	// ruleid: go-ssrf-user-input
 	target := r.URL.Query().Get("url")
 	// ruleid: go-ssrf-user-input
 	http.Get(target)
