@@ -431,3 +431,6 @@ analysis_results/
 
 # Sandboxed pytest cache dirs (accidental)
 pytest-cache-files-*/
+
+# Local planning docs (not part of the package)
+plans/

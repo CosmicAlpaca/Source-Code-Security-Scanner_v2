@@ -6,12 +6,12 @@
 
 `radar` là CLI local với 2 năng lực, dùng độc lập:
 
-1. **`radar scan`** — quét lỗ hổng bằng [Semgrep](https://semgrep.dev) (preset chuẩn ngành + 13 custom rules). Tự chạy native hoặc Docker.
+1. **`radar scan`** — quét lỗ hổng bằng [Semgrep](https://semgrep.dev) (preset chuẩn ngành + 50 custom rules). Tự chạy native hoặc Docker.
 2. **`radar impact`** — dựng function-level call graph trả lời *"sửa hàm này thì function / API / feature nào bị ảnh hưởng?"*
 
 > 🔒 **Zero-footprint** — cả hai lệnh chạy trên repo bất kỳ mà **không tạo file nào** trong repo đó: scan đọc kết quả Semgrep qua stdout; impact lưu graph cache *ngoài* repo. Bạn cũng có thể [gắn vào GitHub Actions](#phần-4--gắn-vào-ci-github-actions) để tự động hoá theo PR.
 
-**Ngôn ngữ:** scan = 30+ ngôn ngữ (Semgrep tự nhận diện) · impact graph = **JS/TS** (`.js .jsx .ts .tsx .mjs .cjs`) + **Python** (`.py`) + **Go** (`.go`) + **Java** (`.java`), route detect cho Express / Flask / FastAPI / net·http / gorilla·mux / Spring MVC / JAX-RS.
+**Ngôn ngữ:** scan = 30+ ngôn ngữ (Semgrep tự nhận diện) · impact graph = **JS/TS** (`.js .jsx .ts .tsx .mjs .cjs`) + **Python** (`.py`) + **Go** (`.go`) + **Java** (`.java`) + **PHP** (`.php`), route detect cho Express / Flask / FastAPI / net·http / gorilla·mux / Spring MVC / JAX-RS / Laravel.
 
 ---
 
@@ -39,7 +39,7 @@ Thiếu cả hai → `radar scan` báo lỗi rõ. `radar impact` không cần Se
 Quét ngay trên máy, không cần CI, **không ghi gì** vào repo được quét:
 
 ```bash
-radar scan .                          # quét repo hiện tại (preset + 13 custom rules)
+radar scan .                          # quét repo hiện tại (preset + 50 custom rules)
 radar scan ../other-repo              # quét repo khác
 radar scan --rules-only               # offline: chỉ custom rules, bỏ preset (không cần mạng)
 radar scan --format json > out.json   # máy đọc
@@ -58,7 +58,9 @@ Output mặc định — bảng terminal gom theo severity:
 - **Mặc định không block** (exit 0) — chỉ informational. `--error` mới làm exit≠0; `--fail-on error|warning|info` chọn ngưỡng.
 - **`--rules-only`** chạy được offline (chỉ custom rules). Mặc định có thêm preset registry (`p/security-audit`, `p/secrets`, `p/owasp-top-ten`) — cần mạng lần đầu.
 
-### 13 custom rules đi kèm
+### 50 custom rules đi kèm (JS 11 · Python 10 · Go 8 · Java 10 · PHP 11)
+
+Bảng dưới liệt kê JS/Python (bộ gốc); Go/Java/PHP có bộ OWASP tương đương trong `src/radar/rules/`.
 
 | Rule | OWASP | Bắt gì |
 |---|---|---|
@@ -180,7 +182,7 @@ Kịch bản 5 phút (sửa 1 hàm → mở PR → xem findings + blast radius):
 
 ## Mở rộng ngôn ngữ (impact graph)
 
-Impact graph hỗ trợ **4 ngôn ngữ** out-of-the-box:
+Impact graph hỗ trợ **5 ngôn ngữ** out-of-the-box:
 
 | Ngôn ngữ | Extension | Route detect |
 |---|---|---|
@@ -188,15 +190,16 @@ Impact graph hỗ trợ **4 ngôn ngữ** out-of-the-box:
 | Python | `.py` | Flask, FastAPI |
 | Go | `.go` | `net/http` (`HandleFunc`), gorilla/mux (`.Get/.Post/…`) |
 | Java | `.java` | Spring MVC (`@GetMapping`, `@RequestMapping`), JAX-RS (`@GET` + `@Path`) |
+| PHP | `.php` | Laravel (`Route::get/post/…`, closure + `[Ctrl::class,'m']` + `"Ctrl@method"`), plain `$_GET/$_POST` entrypoint |
 
-Go và Java parser được cài tự động khi `pip install .` trên Python ≥ 3.11. Nếu bạn đang dùng Python cũ hơn hoặc muốn cài thủ công:
+Go / Java / PHP parser được cài tự động khi `pip install .` trên Python ≥ 3.11. Nếu bạn đang dùng Python cũ hơn hoặc muốn cài thủ công:
 ```bash
-pip install tree-sitter-go tree-sitter-java
+pip install tree-sitter-go tree-sitter-java tree-sitter-php
 # hoặc qua extras:
-pip install "security-radar[go,java]"
+pip install "security-radar[go,java,php]"
 ```
 
-Cả hai plugin **graceful degrade** — nếu parser chưa có thì tự bỏ qua, không crash, chỉ không parse file `.go`/`.java`.
+Các plugin **graceful degrade** — nếu parser chưa có thì tự bỏ qua, không crash, chỉ không parse file `.go`/`.java`/`.php`.
 
 Thêm ngôn ngữ mới = thêm **1 file plugin** trong `src/radar/graph/languages/` (subclass `LanguageExtractor`), registry tự phát hiện — không sửa core. Xem `python.py` làm mẫu.
 
@@ -205,7 +208,7 @@ Thêm ngôn ngữ mới = thêm **1 file plugin** trong `src/radar/graph/languag
 | Thành phần | Thư viện / Tool | Ghi chú |
 |---|---|---|
 | Static analysis engine | [Semgrep](https://semgrep.dev) | Dùng taint mode để trace data flow source → sink |
-| Custom OWASP rules | YAML (Semgrep DSL) | 13 rules tự viết, đóng gói trong package |
+| Custom OWASP rules | YAML (Semgrep DSL) | 50 rules tự viết (JS·Py·Go·Java·PHP), đóng gói trong package |
 | AST parser | [tree-sitter](https://tree-sitter.github.io) + bindings JS/TS/Python/Go/Java | Parse codebase thành AST, tự viết extractor cho từng ngôn ngữ |
 | Call graph | [NetworkX](https://networkx.org) `DiGraph` | Lưu function calls + imports; reverse BFS để tính blast radius |
 | CLI | [Click](https://click.palletsprojects.com) | Subcommands `radar scan / impact / build` |
