@@ -375,7 +375,7 @@ def render_dashboard(
 
     mermaid_section = ""
     if mermaid_src:
-        fn_note = (' <span style="font-size:12px;color:#7f8c8d;font-weight:400">function: ' + _esc(traced_fn) + "</span>") if traced_fn else ""
+        fn_note = (' <span style="font-size:12px;color:#7f8c8d;font-weight:400">' + _esc(traced_fn) + "</span>") if traced_fn else ""
         mermaid_section = (
             '<div class="panel" style="margin-top:20px"><div class="panel-header">'
             '<span class="panel-title">🔗 Blast Radius — Call Graph' + fn_note + "</span></div>"

@@ -2,6 +2,7 @@
 
 import types
 
+import pytest
 from click.testing import CliRunner
 
 from radar import cli
@@ -95,6 +96,26 @@ def test_report_triage_adds_columns(monkeypatch, tmp_path):
     assert res.exit_code == 0
     html = out.read_text(encoding="utf-8")
     assert "AI verdict" in html and "likely" in html
+
+
+def test_report_auto_picks_function_by_finding_location(monkeypatch, tmp_path):
+    """Auto blast-radius traces the function CONTAINING the finding (by file+line),
+    not the rule name — regression guard for the old rule-name heuristic."""
+    pytest.importorskip("tree_sitter_php")
+    (tmp_path / "app.php").write_text(
+        "<?php\nfunction handler() {\n  $x = md5($_GET['p']);\n  return $x;\n}\n",
+        encoding="utf-8",
+    )
+    from radar.scan import runner
+    sample = {"results": [{"check_id": "rules.php-weak-hash", "path": "app.php",
+                           "start": {"line": 3}, "extra": {"severity": "WARNING", "message": "md5"}}]}
+    monkeypatch.setattr(runner, "detect_runtime", lambda: "native")
+    monkeypatch.setattr(runner, "run_semgrep", lambda *a, **k: sample)
+    out = tmp_path / "d.html"
+    res = CliRunner().invoke(cli.main, ["report", str(tmp_path), "--out", str(out)])
+    assert res.exit_code == 0
+    assert "finding site(s)" in res.output  # graph traced, not skipped
+    assert "Blast Radius" in out.read_text(encoding="utf-8")
 
 
 def test_report_triage_falls_back_when_unavailable(monkeypatch, tmp_path):

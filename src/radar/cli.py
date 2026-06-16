@@ -379,24 +379,32 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
 
     # ── 2. Impact graph (blast radius) ───────────────────────────────────────
     mermaid_src = ""
-    fn = function_name
+    trace_label = None
     console.print("[dim]② building call graph…[/]")
     try:
         from radar.config import load_config
         from radar.graph.builder import build_graph
-        from radar.impact.diff_mapper import find_function_nodes
+        from radar.impact.diff_mapper import find_function_nodes, map_to_nodes
         from radar.impact.tracer import trace
         from radar.report.exporters import to_mermaid
 
         graph = build_graph(root, config=load_config(root))
-        if not fn and items:
-            errors = [f for f in items if f.severity == "ERROR"]
-            candidate = errors[0] if errors else items[0]
-            fn = candidate.rule.rsplit(".", 1)[-1]
-        if fn:
-            node_ids = find_function_nodes(graph, fn)
+        if function_name:
+            node_ids = find_function_nodes(graph, function_name)
+            trace_label = "function: " + function_name
+        else:
+            # Auto: blast radius of the functions that CONTAIN the findings
+            # (severity-first, capped) — by location, not by rule name.
+            sev_rank = {"ERROR": 0, "WARNING": 1, "INFO": 2}
+            ranked = sorted(items, key=lambda f: sev_rank.get(f.severity, 3))
+            changes: dict = {}
+            for f in ranked[:15]:
+                changes.setdefault(f.path, set()).add(f.line)
+            node_ids = map_to_nodes(graph, changes) if changes else []
             if node_ids:
-                mermaid_src = to_mermaid(trace(graph, node_ids))
+                trace_label = str(len(node_ids)) + " finding site(s)"
+        if node_ids:
+            mermaid_src = to_mermaid(trace(graph, node_ids))
     except Exception as exc:
         console.print(f"[dim yellow]⚠ impact graph skipped: {exc}[/]")
 
@@ -406,7 +414,7 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
     # ── 4. Render single-file HTML ───────────────────────────────────────────
     html = render_dashboard(
         repo_path=str(root), findings=items, suppressed=len(suppressed),
-        mermaid_src=mermaid_src, traced_fn=fn, history=history, verdict_map=verdict_map,
+        mermaid_src=mermaid_src, traced_fn=trace_label, history=history, verdict_map=verdict_map,
     )
     dest.write_text(html, encoding="utf-8")
 
@@ -414,7 +422,7 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
     console.print(
         f"   {smry['error']} error · {smry['warning']} warning · {len(suppressed)} suppressed"
         + (" · AI-triaged" if verdict_map is not None else "")
-        + (f" · impact graph: {fn}" if mermaid_src else " · impact graph: skipped")
+        + (f" · impact graph: {trace_label}" if mermaid_src else " · impact graph: skipped")
     )
 
 
