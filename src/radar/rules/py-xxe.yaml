@@ -1,0 +1,21 @@
+rules:
+  - id: py-xxe
+    languages: [python]
+    severity: ERROR
+    message: >-
+      xml.etree.ElementTree and xml.minidom are vulnerable to XML External Entity (XXE) attacks
+      when parsing untrusted input. Use defusedxml library instead:
+      import defusedxml.ElementTree as ET.
+    metadata:
+      category: security
+      cwe: "CWE-611: XML External Entity"
+      owasp: "A05:2021 - Security Misconfiguration"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: xml.etree.ElementTree.parse(...)
+      - pattern: xml.etree.ElementTree.fromstring(...)
+      - pattern: ET.parse(...)
+      - pattern: ET.fromstring(...)
+      - pattern: minidom.parse(...)
+      - pattern: minidom.parseString(...)
+      - pattern: xml.dom.minidom.parse(...)

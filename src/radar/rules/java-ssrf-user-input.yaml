@@ -1,0 +1,20 @@
+rules:
+  - id: java-ssrf-user-input
+    languages: [java]
+    severity: ERROR
+    message: >-
+      User-controlled value used as a URL in an HTTP request — allows SSRF.
+      Validate the URL against an allowlist of trusted hosts before making requests.
+    metadata:
+      category: security
+      cwe: "CWE-918: SSRF"
+      owasp: "A10:2021 - Server-Side Request Forgery"
+      confidence: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.getParameter(...)
+      - pattern: $REQ.getHeader(...)
+    pattern-sinks:
+      - pattern: new URL($URL).openConnection()
+      - pattern: new URL($URL).openStream()
+      - pattern: new URL($URL)

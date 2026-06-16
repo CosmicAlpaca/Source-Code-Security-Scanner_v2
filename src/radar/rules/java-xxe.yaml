@@ -1,0 +1,24 @@
+rules:
+  - id: java-xxe
+    languages: [java]
+    severity: ERROR
+    message: >-
+      XML parser created without disabling external entity processing — allows XXE attacks.
+      Call factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+      before parsing untrusted XML.
+    metadata:
+      category: security
+      cwe: "CWE-611: XML External Entity"
+      owasp: "A05:2021 - Security Misconfiguration"
+      confidence: MEDIUM
+    patterns:
+      - pattern: |
+          $FACTORY = DocumentBuilderFactory.newInstance();
+          ...
+          $FACTORY.newDocumentBuilder()
+      - pattern-not: |
+          $FACTORY = DocumentBuilderFactory.newInstance();
+          ...
+          $FACTORY.setFeature(...)
+          ...
+          $FACTORY.newDocumentBuilder()

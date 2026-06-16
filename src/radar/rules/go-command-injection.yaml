@@ -1,0 +1,22 @@
+rules:
+  - id: go-command-injection
+    languages: [go]
+    severity: ERROR
+    message: >-
+      User-controlled data flows into exec.Command — allows OS command injection.
+      Validate and whitelist inputs; avoid constructing commands from user data.
+    metadata:
+      category: security
+      cwe: "CWE-78: OS Command Injection"
+      owasp: "A03:2021 - Injection"
+      confidence: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern: $R.URL.Query().Get(...)
+      - pattern: $R.FormValue(...)
+      - pattern: $R.PostFormValue(...)
+      - pattern: $R.Header.Get(...)
+      - pattern: chi.URLParam($R, ...)
+    pattern-sinks:
+      - pattern: exec.Command($CMD, ...)
+      - pattern: exec.CommandContext($CTX, $CMD, ...)

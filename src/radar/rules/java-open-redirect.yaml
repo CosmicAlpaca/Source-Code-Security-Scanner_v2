@@ -1,0 +1,18 @@
+rules:
+  - id: java-open-redirect
+    languages: [java]
+    severity: WARNING
+    message: >-
+      User-controlled value passed to response.sendRedirect() — allows open redirect.
+      Validate the redirect destination against an allowlist of trusted paths.
+    metadata:
+      category: security
+      cwe: "CWE-601: Open Redirect"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.getParameter(...)
+      - pattern: $REQ.getHeader(...)
+    pattern-sinks:
+      - pattern: $RESP.sendRedirect($URL)

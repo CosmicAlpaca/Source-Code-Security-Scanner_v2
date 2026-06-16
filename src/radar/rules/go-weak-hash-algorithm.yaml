@@ -1,0 +1,17 @@
+rules:
+  - id: go-weak-hash-algorithm
+    languages: [go]
+    severity: WARNING
+    message: >-
+      MD5 and SHA-1 are cryptographically broken and must not be used for password hashing
+      or data integrity. Use SHA-256 or bcrypt/argon2 for passwords.
+    metadata:
+      category: security
+      cwe: "CWE-327: Weak Cryptographic Algorithm"
+      owasp: "A02:2021 - Cryptographic Failures"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: md5.New()
+      - pattern: md5.Sum(...)
+      - pattern: sha1.New()
+      - pattern: sha1.Sum(...)

@@ -1,0 +1,25 @@
+rules:
+  - id: go-path-traversal
+    languages: [go]
+    severity: ERROR
+    message: >-
+      User-controlled path flows into file operations — allows path traversal.
+      Use filepath.Clean and validate the result stays within an allowed base directory.
+    metadata:
+      category: security
+      cwe: "CWE-22: Path Traversal"
+      owasp: "A01:2021 - Broken Access Control"
+      confidence: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern: $R.URL.Query().Get(...)
+      - pattern: $R.FormValue(...)
+      - pattern: $R.URL.Path
+      - pattern: chi.URLParam($R, ...)
+    pattern-sinks:
+      - pattern: os.Open($PATH)
+      - pattern: os.ReadFile($PATH)
+      - pattern: os.WriteFile($PATH, ...)
+      - pattern: ioutil.ReadFile($PATH)
+      - pattern: ioutil.WriteFile($PATH, ...)
+      - pattern: http.ServeFile($W, $R, $PATH)
