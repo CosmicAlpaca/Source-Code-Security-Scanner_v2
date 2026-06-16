@@ -14,6 +14,7 @@ def read_file():
     name = request.args['name']
     # ruleid: py-path-traversal
     path = os.path.join('/var/data', name)
+    # ruleid: py-path-traversal
     return open(path).read()
 
 @app.route('/safe')
