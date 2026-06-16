@@ -10,10 +10,18 @@ rules:
       cwe: "CWE-79: Cross-site Scripting"
       owasp: "A03:2021 - Injection"
       confidence: HIGH
-    pattern-either:
-      - pattern: echo $_GET[$KEY]
-      - pattern: echo $_POST[$KEY]
-      - pattern: echo $_REQUEST[$KEY]
-      - pattern: echo $_COOKIE[$KEY]
-      - pattern: print($_GET[$KEY])
-      - pattern: print($_POST[$KEY])
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET[$KEY]
+      - pattern: $_POST[$KEY]
+      - pattern: $_REQUEST[$KEY]
+      - pattern: $_COOKIE[$KEY]
+    pattern-sinks:
+      - pattern: echo $SINK
+      - pattern: print($SINK)
+      - pattern: printf($SINK, ...)
+      - pattern: print_r($SINK)
+    pattern-sanitizers:
+      - pattern: htmlspecialchars($S, ...)
+      - pattern: htmlentities($S, ...)
+      - pattern: strip_tags($S)
