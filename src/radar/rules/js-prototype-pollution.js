@@ -1,6 +1,6 @@
-// ruleid: js-prototype-pollution
+// ok: js-prototype-pollution
 app.post('/settings', (req, res) => {
-  Object.assign(config, req.body);
+  Object.assign(config, req.body); // ruleid: js-prototype-pollution
 });
 
 // ok: js-prototype-pollution

@@ -5,13 +5,11 @@ import (
 	"os/exec"
 )
 
-// ruleid: go-command-injection
 func bad(r *http.Request) {
 	name := r.URL.Query().Get("file")
-	exec.Command("ls", name).Run()
+	exec.Command("ls", name).Run() // ruleid: go-command-injection
 }
 
-// ok: go-command-injection
 func good(r *http.Request) {
-	exec.Command("ls", "-la", "/safe/path").Run()
+	exec.Command("ls", "-la", "/safe/path").Run() // ok: go-command-injection
 }
