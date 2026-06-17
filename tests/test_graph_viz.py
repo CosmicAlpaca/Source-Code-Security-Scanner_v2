@@ -27,6 +27,14 @@ def test_html_carries_graph_data():
     assert '"name": "foo"' in html
 
 
+def test_render_script_tag_is_closed_properly():
+    # A backslash-escaped closer ('<\\/script>') leaves the render script unterminated,
+    # so the browser never runs it and the canvas stays blank. Guard against regression.
+    html = to_dependency_html(_graph())
+    assert "<\\/script>" not in html
+    assert html.rstrip().endswith("</script>\n</body>\n</html>".rstrip()) or "</script>\n</body>" in html
+
+
 def test_falls_back_to_cdn_when_vendor_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(graph_viz, "_VENDOR_D3", tmp_path / "missing.js")
     html = to_dependency_html(_graph())

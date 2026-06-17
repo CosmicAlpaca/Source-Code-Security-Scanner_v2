@@ -351,7 +351,7 @@ _HTML_TEMPLATE = (
     '  svg.attr(\'width\',vw()).attr(\'height\',vh());\n'
     '  sim.force(\'center\',d3.forceCenter(vw()/2,vh()/2)).alpha(0.1).restart();\n'
     '});\n'
-    '<\/script>\n'
+    '</script>\n'
     '</body>\n'
     '</html>\n'
 )
