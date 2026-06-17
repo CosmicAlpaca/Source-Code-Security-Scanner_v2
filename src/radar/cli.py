@@ -253,15 +253,21 @@ def triage(path, floor, only_all, dry_run, force, rules_only, extra, top, fail_o
     """
     from radar.scan.findings import SEVERITY_ORDER
     from radar.scan.runner import ScanError
-    from radar.triage import engine, render
+    from radar.triage import engine, llm_client, render
     from radar.triage.llm_client import TriageError
     from radar.triage.risk import risk_score
 
     root = Path(path).resolve()
+
+    # Offline ranking (reachability + risk) needs no key; only --fail-on reads the
+    # AI verdict (enforced fail-closed in _triage_gate). Everything else runs offline.
+    llm_client.load_dotenv(root)
+    has_key = llm_client.resolve_key() is not None
+
     try:
         results, calls = engine.triage(
             root, rules_only=rules_only, extra_config=list(extra), floor=floor,
-            only_all=only_all, force=force, dry_run=dry_run,
+            only_all=only_all, force=force, dry_run=dry_run, allow_offline=True,
             emit=(lambda m: console.print(m, highlight=False)) if dry_run else None,
         )
     except ScanError as exc:
@@ -274,6 +280,9 @@ def triage(path, floor, only_all, dry_run, force, rules_only, extra, top, fail_o
     if dry_run:
         console.print(f"[dim]dry-run: {len(results)} finding(s) prepared, 0 API calls.[/]")
         return
+
+    if not has_key:
+        console.print("[dim]No API key — offline ranking only (risk score, no AI verdicts).[/]")
 
     # Rank by risk desc (tie: severity, path, line) — the output axis.
     risk_map = {id(tf): risk_score(tf.finding, tf.reach, tf.verdict) for tf in results}
@@ -301,13 +310,14 @@ def _triage_gate(results, risk_map, fail_on, min_risk) -> None:
     """Exit non-zero when ranking crosses a threshold; print the trigger first."""
     _FAIL_RANK = {"exploitable": 0, "likely": 1}
     if fail_on:
-        # Fail closed: if any verdict is missing (model error), a CI gate must not
-        # silently pass — we can't prove the finding is safe.
-        errored = [tf for tf in results if getattr(tf, "error", None)]
-        if errored:
+        # Fail closed: --fail-on reads the AI verdict, so any finding lacking one
+        # (no API key, or the model errored) means we can't prove it safe — a CI
+        # gate must not pass silently.
+        missing = [tf for tf in results if not (tf.verdict or {}).get("exploitability")]
+        if missing:
             console.print(
-                f"[red]✗ --fail-on {fail_on}:[/] {len(errored)} finding(s) have no AI verdict "
-                "(model unavailable) — cannot prove safe, failing closed."
+                f"[red]✗ --fail-on {fail_on}:[/] {len(missing)} finding(s) have no AI verdict "
+                "(no API key or model unavailable) — cannot prove safe, failing closed."
             )
             sys.exit(2)
         limit = _FAIL_RANK[fail_on]

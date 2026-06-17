@@ -102,6 +102,14 @@ def test_fail_on_fails_closed_when_verdict_errored(monkeypatch, tmp_path):
     assert "failing closed" in res.output
 
 
+def test_fail_on_fails_closed_when_no_key(monkeypatch, tmp_path):
+    """Offline (no verdict, no error): --fail-on can't prove safe -> fail closed."""
+    _patch(monkeypatch, [_tf(verdict=None)])  # no key path: reachability only
+    res = CliRunner().invoke(cli.main, ["triage", str(tmp_path), "--fail-on", "exploitable"])
+    assert res.exit_code == 2
+    assert "failing closed" in res.output
+
+
 def test_negative_top_rejected(monkeypatch, tmp_path):
     _patch(monkeypatch, [_tf()])
     res = CliRunner().invoke(cli.main, ["triage", str(tmp_path), "--top", "-5"])
