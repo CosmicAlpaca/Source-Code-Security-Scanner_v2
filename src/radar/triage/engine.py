@@ -46,9 +46,15 @@ def triage(
     only_all: bool = False,
     force: bool = False,
     dry_run: bool = False,
+    allow_offline: bool = False,
     emit=None,
 ) -> tuple[list[TriagedFinding], int]:
-    """Run scan + enrich findings with AI verdicts. Returns (results, api_call_count)."""
+    """Run scan + enrich findings with AI verdicts. Returns (results, api_call_count).
+
+    With no API key: raise TriageError unless `allow_offline` — then return findings
+    enriched with reachability only (verdict=None) so the caller can still rank by
+    risk score (`--min-risk`) without a key.
+    """
     emit = emit or (lambda _msg: None)
     llm_client.load_dotenv(root)
 
@@ -62,8 +68,11 @@ def triage(
 
     graph = _load_or_build_graph(root)
 
-    # Opt-in gate: fail before the loop if no key (real runs only; dry-run never calls out).
-    if not dry_run and llm_client.resolve_key() is None:
+    # Query the model only on real runs that have a key. Without a key, run offline
+    # (reachability + risk, no verdict) when allowed, else fail with a clear message.
+    has_key = llm_client.resolve_key() is not None
+    query_ai = not dry_run and has_key
+    if not dry_run and not has_key and not allow_offline:
         raise llm_client.TriageError(
             "No API key. Set OPENAI_API_KEY (or RADAR_AI_API_KEY) in your environment "
             "or a repo-root .env file, then re-run `radar triage`."
@@ -78,6 +87,9 @@ def triage(
             messages = build_messages(finding, snippet, reach)
             emit(f"--- {finding.path}:{finding.line}  [{finding.rule}]  reach={reach.status} ---")
             emit(messages[1]["content"])
+            results.append(TriagedFinding(finding, reach))
+            continue
+        if not query_ai:  # offline ranking: reachability + risk only, no AI verdict
             results.append(TriagedFinding(finding, reach))
             continue
         try:

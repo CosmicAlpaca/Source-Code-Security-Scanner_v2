@@ -69,3 +69,31 @@ def test_call_count_tracks_uncached(monkeypatch):
     _wire(monkeypatch)
     _results, n_calls = engine.triage(FIXTURE, only_all=True)
     assert n_calls == 2
+
+
+def _wire_no_key(monkeypatch):
+    """Same boundaries as _wire but with no resolvable API key."""
+    monkeypatch.setattr(engine, "detect_runtime", lambda: "native")
+    monkeypatch.setattr(engine, "run_semgrep", lambda *a, **k: REPORT)
+    monkeypatch.setattr("radar.cli._load_or_build_graph", lambda root, *a, **k: build_graph(FIXTURE))
+    monkeypatch.setattr(engine.llm_client, "resolve_key", lambda: None)
+    monkeypatch.setattr(engine.llm_client, "get_verdict",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not call AI offline")))
+
+
+def test_no_key_raises_without_allow_offline(monkeypatch):
+    _wire_no_key(monkeypatch)
+    try:
+        engine.triage(FIXTURE, only_all=True)
+        raise AssertionError("expected TriageError")
+    except engine.llm_client.TriageError:
+        pass
+
+
+def test_allow_offline_returns_reachability_only(monkeypatch):
+    _wire_no_key(monkeypatch)
+    results, n_calls = engine.triage(FIXTURE, only_all=True, allow_offline=True)
+    assert n_calls == 0
+    assert len(results) == 2
+    assert all(tf.verdict is None for tf in results)  # ranked by risk, no AI verdict
+    assert any(tf.reach.status == "reachable" for tf in results)
