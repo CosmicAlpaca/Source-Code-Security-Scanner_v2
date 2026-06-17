@@ -38,7 +38,7 @@ radar = "radar.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-radar = ["report/templates/*.j2", "rules/*"]
+radar = ["report/templates/*.j2", "rules/*", "graph/vendor/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

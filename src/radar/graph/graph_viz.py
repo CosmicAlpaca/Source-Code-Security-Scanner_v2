@@ -9,8 +9,23 @@ Usage:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import networkx as nx
+
+# Bundled D3 so the graph renders offline (zero-footprint promise). Falls back to
+# the CDN only if the vendored file is missing from the install.
+_VENDOR_D3 = Path(__file__).resolve().parent / "vendor" / "d3.v7.min.js"
+_CDN_D3 = "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"
+
+
+def _d3_script_tag() -> str:
+    """Inline the vendored D3 source; fall back to a CDN <script src> if absent."""
+    try:
+        src = _VENDOR_D3.read_text(encoding="utf-8")
+    except OSError:
+        return f'<script src="{_CDN_D3}"></script>'
+    return "<script>\n" + src + "\n</script>"
 
 # Edge kind constants (mirrors model.py)
 CALLS   = "calls"
@@ -103,7 +118,7 @@ _HTML_TEMPLATE = (
     '<meta charset="utf-8">\n'
     '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
     '<title>security-radar — Dependency Graph</title>\n'
-    '<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>\n'
+    'D3_SCRIPT_TAG\n'
     '<style>\n'
     '*{box-sizing:border-box;margin:0;padding:0}\n'
     'body{font-family:system-ui,sans-serif;background:#0f1923;color:#cdd6e0;overflow:hidden}\n'
@@ -357,4 +372,6 @@ def _render(
     html = html.replace("NODE_COUNT", str(stats["nodes"]))
     html = html.replace("EDGE_COUNT", str(stats["edges"]))
     html = html.replace("FILE_COUNT", str(stats["files"]))
+    # D3 inlined last: its minified source must not be re-scanned for placeholders.
+    html = html.replace("D3_SCRIPT_TAG", _d3_script_tag())
     return html
