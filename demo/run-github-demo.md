@@ -1,85 +1,127 @@
-# Kịch bản Demo: Security Radar trên Repository GitHub Bất Kỳ
+# Kịch bản Demo cho sếp — `security-radar` trên repo GitHub bất kỳ
 
-Tài liệu này hướng dẫn cách sử dụng script `analyze-github.py` để quét tự động lỗ hổng bảo mật (OWASP Top 10) và vẽ bản đồ ảnh hưởng (Impact Graph) trên **bất kỳ repository GitHub nào**. Đây là phần minh họa cho tính năng phân tích độc lập (Zero-footprint) mà không cần can thiệp trực tiếp vào mã nguồn của dự án đang chạy.
+Kịch bản trình diễn (~5–7 phút) chứng minh tool chạy được trên **bất kỳ repo GitHub open-source nào** — không giới hạn trong app demo có sẵn. Thông điệp: *"Cài 1 lần, chĩa vào repo bất kỳ, ra ngay 3 thứ — lỗ hổng OWASP, bản đồ ảnh hưởng, và bảng xếp hạng rủi ro."*
 
-> 📎 Demo này = phân tích **repo ngoài** qua script. Muốn demo pipeline CI (PR comment + SARIF tab Security) trên app mẫu có sẵn → xem [`run-demo.md`](run-demo.md).
+> 📎 Muốn demo pipeline CI (PR comment + SARIF tab Security) trên app mẫu → xem [`run-demo.md`](run-demo.md).
 
-## 1. Mục đích
+---
 
-- **Xác định lỗ hổng (Security Scan)**: Chạy công cụ quét với bộ rules `p/owasp-top-ten` (các lỗ hổng phổ biến nhất) và các rule tự định nghĩa (ví dụ: hardcoded JWT, SQL injection) trên thư mục được clone về.
-- **Vẽ bản đồ ảnh hưởng (Impact Map)**: Tự động trích xuất luồng phụ thuộc (blast radius). Nếu chọn một nhánh (`--branch`), sẽ chỉ ra các thay đổi code đã ảnh hưởng đến những API endpoint hay chức năng nào. Nếu chỉ định `--function`, sẽ hiển thị luồng cụ thể của hàm đó kèm sơ đồ Mermaid.
+## 1. Thông điệp cho sếp (nói trước khi gõ lệnh)
 
-## 2. Chuẩn bị
+| Năng lực | Trả lời câu hỏi | Lệnh |
+|---|---|---|
+| **Security Scan** | "Repo này có lỗ hổng OWASP nào?" | `radar scan` |
+| **Impact Graph** | "Sửa hàm/API này thì lan tới đâu?" | `radar impact` |
+| **⭐ Risk Ranking** | "Trong hàng chục finding, **fix cái nào trước**?" | `radar report` / `radar triage` |
 
-Đảm bảo bạn đã cài đặt các công cụ:
-- **Git**
-- **Semgrep** (Cài đặt: `python -m pip install semgrep` nếu chạy native, hoặc cài thông qua pipx/docker)
-- **Security Radar**: `python -m pip install -e .`
+Điểm nhấn: **zero-footprint** (không ghi file nào vào repo target) và **Risk Ranking chạy được không cần API key** — sếp không phải lo chi phí AI để thấy giá trị.
 
-## 3. Cách chạy Demo
+---
 
-Script chạy nằm tại thư mục `scripts/analyze-github.py`.
-
-### Cú pháp:
+## 2. Chuẩn bị (làm trước buổi demo)
 
 ```bash
-python scripts/analyze-github.py --url <GITHUB_URL> [--branch <BRANCH>] [--function <FUNCTION_NAME>]
+python -m pip install -e .          # cài radar
+radar --help                        # phải in 8 lệnh
 ```
 
-### Kịch bản 1: Phân tích Impact của một nhánh (Diff Branch)
-Giả sử bạn muốn xem nhánh `feature/new-api` của một repo đã thay đổi những gì và ảnh hưởng đến đâu:
+Cần: **Git** + **Semgrep** (native `semgrep` trên PATH hoặc Docker Desktop bật — cho `scan`).
+`impact` và Risk Ranking base score **không cần** Semgrep/API key.
+
+> 💡 **Mẹo demo mượt**: clone trước repo định trình diễn (script tự cache vào `analysis_repos/`) để khỏi chờ tải mạng lúc đứng trước sếp.
+
+---
+
+## 3. Phần A — Chạy script tự động (scan + impact)
+
+Script `scripts/analyze-github.py` clone repo → quét OWASP → vẽ impact graph. Chạy tương tác hoặc truyền tham số:
 
 ```bash
-python scripts/analyze-github.py --url https://github.com/username/project.git --branch feature/new-api
+# Tương tác (hỏi URL / branch / function):
+python scripts/analyze-github.py
+
+# Hoặc truyền thẳng — trace 1 function (đẹp nhất để demo):
+python scripts/analyze-github.py --url https://github.com/OWASP/NodeGoat.git --function validateLogin
 ```
-**Kết quả dự kiến:**
-1. **Security Scan**: Quét nhánh `feature/new-api` và xuất danh sách lỗ hổng OWASP nếu có.
-2. **Impact Map**: Phân tích sự khác biệt (diff) giữa nhánh `feature/new-api` và nhánh chính (`main`), sau đó in ra bảng tóm tắt: "Thay đổi hàm X → Ảnh hưởng API Y, Z".
 
-### Kịch bản 2: Truy vết một Function cụ thể (Vẽ luồng)
-Giả sử bạn biết một hàm cốt lõi (ví dụ `validateUser`) vừa được sửa và muốn xem nó lan truyền đến những API endpoint nào:
+Output (terminal + lưu file):
 
-```bash
-python scripts/analyze-github.py --url https://github.com/username/project.git --function validateUser
-```
-**Kết quả dự kiến:**
-1. **Security Scan**: Liệt kê các cảnh báo bảo mật.
-2. **Impact Map**: In ra dạng cây (Tree) và **mã Mermaid**. Bạn có thể copy mã Mermaid dán vào [Mermaid Live Editor](https://mermaid.live/) hoặc chèn vào file Markdown trên GitHub để xem biểu đồ trực quan.
+| File | Nội dung |
+|---|---|
+| `analysis_results/<repo>_semgrep_results.json` | Findings OWASP + custom rules |
+| `analysis_results/<repo>_impact_graph.html` | Impact graph tương tác (mở browser) |
+| `analysis_results/<repo>_impact_graph.md` | Sơ đồ Mermaid (dán vào GitHub/Mermaid Live) |
 
-## 4. Minh họa kết quả (Expected Output)
+Repo được cache ở `analysis_repos/<repo>/` — lần sau chỉ `git fetch`, không clone lại.
 
-Khi chạy thành công, output sẽ bao gồm:
+**Talking point khi trace function:** *"Đây — sửa `validateLogin` thì 3 API endpoint này gãy theo. Reviewer thấy ngay quy mô PR thay vì đọc code thuần."*
 
-```text
-╭──────────────────────────────────────────────────╮
-│ 🚀 Starting Security Radar Analysis              │
-│ Target: https://github.com/username/project.git  │
-│ Branch: (default)                                │
-╰──────────────────────────────────────────────────╯
-
-1. Cloning repository...
-Cloning into '/tmp/repo'...
-
-2. Running Security Scan (OWASP Top 10 + Custom Rules)...
-[Radar Scan Output hiển thị các lỗi như Injection, XSS, Hardcoded Secret...]
-
-3. Analyzing Impact Graph...
-   Tracing blast radius for function: validateUser
-[Tree View hiển thị API bị ảnh hưởng]
-
-   Mermaid Graph (Copy to GitHub/Mermaid Live):
 ```mermaid
 flowchart TD
-    n0["validateUser"]
-    n1["login"]
-    n2["register"]
-    n3(["POST /login"])
-    n4(["POST /register"])
+    n0["validateLogin"]
+    n1["handleLoginRequest"]
+    n2(["POST /login"])
     n0 --> n1
-    n0 --> n2
-    n1 --> n3
-    n2 --> n4
+    n1 --> n2
     style n0 fill:#f88,stroke:#c00
-    style n3 fill:#8f8,stroke:#080
-    style n4 fill:#8f8,stroke:#080
+    style n2 fill:#8f8,stroke:#080
 ```
+
+---
+
+## 4. Phần B — ⭐ Risk Ranking (điểm nhấn cho sếp)
+
+Script chạy `scan` + `impact`. Để khoe **xếp hạng rủi ro** — câu hỏi sếp quan tâm nhất (*"fix cái nào trước?"*) — chạy thêm trên repo đã cache:
+
+```bash
+# Dashboard hợp nhất: findings xếp theo Risk Score + impact + history → 1 file HTML
+radar report analysis_repos/NodeGoat --out boss-dashboard.html
+
+# Gate "có răng" — exit≠0 nếu có finding rủi ro cao (KHÔNG cần API key):
+radar triage analysis_repos/NodeGoat --top 5          # 5 finding nguy hiểm nhất
+radar triage analysis_repos/NodeGoat --min-risk 80    # chặn PR nếu có risk ≥ 80
+```
+
+Mở `boss-dashboard.html` → cột **Risk** (điểm 0–100 + band: critical/high/medium/low), bảng **sort risk giảm dần**, `noise`/`false_positive` gấp vào fold.
+
+**Talking point:** *"Tool không đổ một đống cảnh báo ngang hàng. Nó tính điểm `severity × khả năng tiếp cận × loại OWASP` rồi đẩy bug nguy hiểm nhất lên đầu. Hover cột Risk thấy luôn lý do tính điểm — không black-box."*
+
+### (Tùy chọn) Nâng cấp bằng AI
+
+Có `OPENAI_API_KEY` thì AI đánh giá exploitability và **ghi đè thứ hạng** (`exploitable` → critical, `false_positive` → fold):
+
+```bash
+export OPENAI_API_KEY=sk-...        # PowerShell: $env:OPENAI_API_KEY="sk-..."
+radar report analysis_repos/NodeGoat --triage --out boss-dashboard.html
+```
+
+Thiếu key → tự render bản offline (vẫn có Risk Ranking), **không lỗi** — an toàn khi demo.
+
+---
+
+## 5. Kết quả mẫu đã kiểm chứng (NodeGoat)
+
+Đã chạy `radar scan --rules-only` trên [OWASP/NodeGoat](https://github.com/OWASP/NodeGoat):
+
+- **8 findings** (5 ERROR · 3 WARNING): eval injection (A08), SSRF (A10), XSS (A03), NoSQL injection, open redirect (A01), plaintext password (A07), session fixation (A07), ReDoS (A05).
+- **Impact graph** trace đúng `validateLogin → handleLoginRequest`, `searchCriteria → displayAllocations`.
+- **True negative**: `js-sql-string-concat` không false-positive trên MongoDB.
+
+---
+
+## 6. Phụ lục — Đọc kết quả
+
+**Risk Score (công thức, giải thích được):**
+
+```
+base = severity_w × reach_mult × class_w           (không cần key)
+  severity_w : ERROR 60 · WARNING 35 · INFO 15
+  reach_mult : reachable → 1.0 + 0.1·min(routes,5) ; unknown → 0.6
+  class_w    : A03/A08 1.3 · A01/A10 1.1 · còn lại 1.0
+band         : ≥80 critical · ≥60 high · ≥35 medium · ≥15 low · còn lại noise
+```
+
+**Impact graph:**
+- **depth** — số bước lan từ hàm bị sửa (caller trực tiếp = depth 1).
+- **⚠ approx** — edge khớp tên toàn cục (name-only), chưa chắc 100%.
+- **feature** — map từ glob trong `radar.config.yml` (không có config → `(unmapped)`).
