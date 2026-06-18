@@ -2,6 +2,23 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
+## [Unreleased] — Unified Dashboard & Premium UI
+
+Gộp tất cả các chức năng (quét bảo mật, phân tích luồng ảnh hưởng, xu hướng lịch sử, AI triage) vào một file HTML dashboard duy nhất với giao diện Premium Tabbed UI, biểu đồ Chart.js và tính năng tìm kiếm.
+
+### Added
+
+- **`radar report` Unified Dashboard** — Thay thế xuất nhiều file rời rạc. Cung cấp một file HTML `*_unified_dashboard.html` duy nhất chứa Tabbed UI: Overview, Findings, Blast Radius, và History.
+- **Premium Design** — Áp dụng Glassmorphism, theme tối tinh tế, các card hiển thị số liệu thống kê rủi ro (CRITICAL/HIGH/MEDIUM/LOW).
+- **Interactive Charts (Chart.js)** — Doughnut chart phân bổ theo Severity và OWASP Category, Line chart theo dõi lịch sử lỗi.
+- **Search & Filter Toolbar** — Nút bấm tương tác trên HTML giúp lọc nhanh theo mức độ nghiêm trọng và tìm kiếm lỗ hổng theo nội dung (text search).
+- **Animated Counters** — Hiệu ứng tăng dần trên các panel đếm số liệu của bảng điều khiển.
+
+### Changed
+
+- **`scripts/analyze-github.py`** — Cập nhật logic để sinh ra 1 file unified dashboard duy nhất thay vì sinh ra 3 file rác như trước. Hỗ trợ hiển thị đúng đường dẫn file và tự động bật `--triage` chỉ khi có biến môi trường `OPENAI_API_KEY`.
+- **`src/radar/cli.py`** — Lệnh `radar report` thêm option `--diff` để hỗ trợ tính blast radius thông qua branch diff, kết hợp thẳng vào unified pipeline. Hỗ trợ fix lỗi Encoding cho Windows (tiếng Nhật `cp932`).
+
 ## [Unreleased] — AI Risk Ranking
 
 Biến AI triage (trước đây là 1 cột thụ động, ẩn sau API key) thành **trục tổ chức output**: một **Risk Score 0–100 luôn tính được** (deterministic, không cần key) sắp xếp lại findings; AI verdict là lớp **nâng cấp** thứ hạng, không phải cột rời.

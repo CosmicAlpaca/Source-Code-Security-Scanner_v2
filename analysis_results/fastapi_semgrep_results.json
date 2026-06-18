@@ -1,0 +1,60 @@
+{
+ "findings": [
+  {
+   "line": 89,
+   "message": "Hardcoded JWT secret or private key is used. This is a Insufficiently Protected Credentials weakness: https://cwe.mitre.org/data/definitions/522.html Consider using an appropriate security mechanism to protect the credentials (e.g. keeping secrets in environment variables)",
+   "path": "D:\\New folder\\Source-Code-Security-Scanner_v2\\analysis_repos\\fastapi\\docs_src\\security\\tutorial004_an_py310.py",
+   "rule": "python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret",
+   "severity": "ERROR"
+  },
+  {
+   "line": 88,
+   "message": "Hardcoded JWT secret or private key is used. This is a Insufficiently Protected Credentials weakness: https://cwe.mitre.org/data/definitions/522.html Consider using an appropriate security mechanism to protect the credentials (e.g. keeping secrets in environment variables)",
+   "path": "D:\\New folder\\Source-Code-Security-Scanner_v2\\analysis_repos\\fastapi\\docs_src\\security\\tutorial004_py310.py",
+   "rule": "python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret",
+   "severity": "ERROR"
+  },
+  {
+   "line": 104,
+   "message": "Hardcoded JWT secret or private key is used. This is a Insufficiently Protected Credentials weakness: https://cwe.mitre.org/data/definitions/522.html Consider using an appropriate security mechanism to protect the credentials (e.g. keeping secrets in environment variables)",
+   "path": "D:\\New folder\\Source-Code-Security-Scanner_v2\\analysis_repos\\fastapi\\docs_src\\security\\tutorial005_an_py310.py",
+   "rule": "python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret",
+   "severity": "ERROR"
+  },
+  {
+   "line": 103,
+   "message": "Hardcoded JWT secret or private key is used. This is a Insufficiently Protected Credentials weakness: https://cwe.mitre.org/data/definitions/522.html Consider using an appropriate security mechanism to protect the credentials (e.g. keeping secrets in environment variables)",
+   "path": "D:\\New folder\\Source-Code-Security-Scanner_v2\\analysis_repos\\fastapi\\docs_src\\security\\tutorial005_py310.py",
+   "rule": "python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret",
+   "severity": "ERROR"
+  },
+  {
+   "line": 103,
+   "message": "Detected a possible YAML deserialization vulnerability. `yaml.unsafe_load`, `yaml.Loader`, `yaml.CLoader`, and `yaml.UnsafeLoader` are all known to be unsafe methods of deserializing YAML. An attacker with control over the YAML input could create special YAML input that allows the attacker to run arbitrary Python code. This would allow the attacker to steal files, download and install malware, or otherwise take over the machine. Use `yaml.safe_load` or `yaml.SafeLoader` instead.",
+   "path": "D:\\New folder\\Source-Code-Security-Scanner_v2\\analysis_repos\\fastapi\\scripts\\docs.py",
+   "rule": "python.lang.security.deserialization.avoid-pyyaml-load.avoid-pyyaml-load",
+   "severity": "ERROR"
+  },
+  {
+   "line": 292,
+   "message": "Detected a possible YAML deserialization vulnerability. `yaml.unsafe_load`, `yaml.Loader`, `yaml.CLoader`, and `yaml.UnsafeLoader` are all known to be unsafe methods of deserializing YAML. An attacker with control over the YAML input could create special YAML input that allows the attacker to run arbitrary Python code. This would allow the attacker to steal files, download and install malware, or otherwise take over the machine. Use `yaml.safe_load` or `yaml.SafeLoader` instead.",
+   "path": "D:\\New folder\\Source-Code-Security-Scanner_v2\\analysis_repos\\fastapi\\scripts\\docs.py",
+   "rule": "python.lang.security.deserialization.avoid-pyyaml-load.avoid-pyyaml-load",
+   "severity": "ERROR"
+  },
+  {
+   "line": 12,
+   "message": "Detected Flask route directly returning a formatted string. This is subject to cross-site scripting if user input can reach the string. Consider using the template engine instead and rendering pages with 'render_template()'.",
+   "path": "D:\\New folder\\Source-Code-Security-Scanner_v2\\analysis_repos\\fastapi\\docs_src\\wsgi\\tutorial001_py310.py",
+   "rule": "python.flask.security.audit.directly-returned-format-string.directly-returned-format-string",
+   "severity": "WARNING"
+  }
+ ],
+ "schema": 1,
+ "summary": {
+  "error": 6,
+  "info": 0,
+  "total": 7,
+  "warning": 1
+ }
+}
