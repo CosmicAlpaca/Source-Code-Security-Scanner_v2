@@ -424,7 +424,7 @@ impact.json
 impact.html
 # Script outputs (cloned repos + generated reports)
 analysis_repos/
-analysis_results/
+
 
 # Browser-automation snapshots (verification evidence)
 .playwright-mcp/

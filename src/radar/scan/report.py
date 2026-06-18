@@ -90,39 +90,153 @@ def _card(count: int, label: str, color: str, bg: str) -> str:
 
 
 _CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#2c3e50;padding:2rem}
-.header{background:linear-gradient(135deg,#1a3a6f 0%,#2471a3 100%);color:white;padding:24px 32px;border-radius:10px;margin-bottom:24px}
-.header h1{font-size:1.5rem;margin-bottom:4px}
-.header .meta{font-size:13px;opacity:.75}
-.cards{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}
-.panel{background:white;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
-.panel-header{padding:14px 20px;border-bottom:1px solid #e8ecf0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.panel-title{font-weight:700;font-size:15px;flex:1}
+:root{--bg:#0a0f1e;--surface:rgba(17,25,45,.85);--border:rgba(255,255,255,.07);--text:#e2e8f0;--muted:#64748b;--blue:#3b82f6;--red:#ef4444;--orange:#f97316;--green:#22c55e;--purple:#a78bfa}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
+/* ── Header ─── */
+.header{background:linear-gradient(135deg,#0d1b3e 0%,#1a3a8f 45%,#6d28d9 100%);padding:28px 40px;position:relative;overflow:hidden}
+.header::after{content:'';position:absolute;top:-60px;right:-60px;width:280px;height:280px;background:radial-gradient(circle,rgba(139,92,246,.3),transparent 70%);pointer-events:none}
+.header h1{font-size:1.65rem;font-weight:900;color:#fff;letter-spacing:-.03em;position:relative}
+.header .meta{font-size:12px;color:rgba(255,255,255,.5);margin-top:6px;position:relative}
+.header .badge-mode{display:inline-block;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;color:rgba(255,255,255,.8);margin-left:8px}
+/* ── Tab bar ─── */
+.tabs{display:flex;gap:0;padding:0 40px;background:rgba(10,15,30,.8);border-bottom:1px solid var(--border);backdrop-filter:blur(10px)}
+.tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:13px;font-weight:600;padding:14px 22px;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:6px}
+.tab-btn .cnt{background:rgba(255,255,255,.1);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700}
+.tab-btn:hover{color:rgba(255,255,255,.85);background:rgba(255,255,255,.04)}
+.tab-btn.active{color:#fff;border-bottom-color:var(--blue)}
+.tab-btn.active .cnt{background:rgba(59,130,246,.3);color:#93c5fd}
+/* ── Tab content ─── */
+.tab-content{display:none;padding:32px 40px;animation:fi .25s ease}
+.tab-content.active{display:block}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* ── Overview grid ─── */
+.ov-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:24px}
+.ov-grid-full{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.ov-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px 28px;backdrop-filter:blur(8px);transition:.2s;position:relative;overflow:hidden}
+.ov-card:hover{border-color:rgba(59,130,246,.3);transform:translateY(-2px)}
+.ov-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent,#3b82f6);opacity:.6}
+.ov-card h3{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+.ov-card .big{font-size:3rem;font-weight:900;line-height:1;margin-bottom:6px}
+.ov-card .sub{font-size:12px;color:var(--muted)}
+.ov-card .trend{font-size:11px;margin-top:8px;padding:3px 8px;border-radius:6px;display:inline-block}
+/* ── Stat cards row ─── */
+.stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px}
+.stat-card{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;text-align:center;transition:.2s;cursor:default}
+.stat-card:hover{border-color:rgba(59,130,246,.3);transform:translateY(-2px)}
+.stat-card .num{font-size:2.4rem;font-weight:900;line-height:1}
+.stat-card .lbl{font-size:10px;font-weight:700;opacity:.5;margin-top:5px;text-transform:uppercase;letter-spacing:.07em}
+/* ── Panel ─── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:18px;backdrop-filter:blur(8px)}
+.panel-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(10,15,30,.5)}
+.panel-title{font-weight:700;font-size:14px;flex:1;color:var(--text)}
+/* ── Table ─── */
 table{width:100%;border-collapse:collapse}
-tr:hover{background:#f8fafc}
-td,th{border-bottom:1px solid #eef1f5;vertical-align:top}
-th{padding:10px 14px;background:#f0f3f7;font-size:12px;text-transform:uppercase;color:#7f8c8d;font-weight:700;text-align:left}
+tr:hover td{background:rgba(255,255,255,.025)}
+td,th{border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+th{padding:10px 14px;background:rgba(10,15,30,.6);font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700;text-align:left;letter-spacing:.06em;cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{color:#93c5fd}
+th.sort-asc::after{content:' ↑'}
+th.sort-desc::after{content:' ↓'}
+td{padding:10px 14px;font-size:12.5px;color:#cbd5e1}
+.file-row td{background:rgba(10,15,30,.5)!important;color:#94a3b8;font-weight:700;font-size:11px;letter-spacing:.02em}
 .hidden{display:none}
-footer{text-align:center;color:#95a5a6;font-size:12px;margin-top:24px}
+/* ── Filter / search bar ─── */
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.search-box{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:5px 12px;color:var(--text);font-size:12px;font-family:inherit;outline:none;width:200px;transition:.2s}
+.search-box:focus{border-color:var(--blue);background:rgba(59,130,246,.08)}
+.search-box::placeholder{color:var(--muted)}
+.fbtn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:700;padding:4px 13px;border-radius:20px;cursor:pointer;transition:.15s;font-family:inherit;letter-spacing:.03em}
+.fbtn:hover,.fbtn.on{background:rgba(59,130,246,.2);border-color:var(--blue);color:#93c5fd}
+/* ── Charts area ─── */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.chart-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 24px}
+.chart-box h4{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px}
+/* ── Mermaid ─── */
+.mermaid-wrap{padding:24px;overflow-x:auto;background:rgba(10,15,30,.5);min-height:160px}
+/* ── Scrollbar ─── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:rgba(255,255,255,.03)}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2)}
+/* ── Footer ─── */
+footer{text-align:center;color:#1e293b;font-size:12px;padding:20px 40px}
+footer a{color:var(--blue);text-decoration:none}
+/* ── OWASP chip ─── */
+.owasp-chip{display:inline-block;background:rgba(59,130,246,.12);color:#93c5fd;border:1px solid rgba(59,130,246,.25);border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+/* ── Severity badge (dark version) ─── */
+.sev-e{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3);border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700}
+.sev-w{background:rgba(249,115,22,.15);color:#fdba74;border:1px solid rgba(249,115,22,.3);border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700}
+.sev-i{background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3);border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700}
+/* ── Risk band ─── */
+.risk-critical{color:#f87171;font-weight:800}.risk-high{color:#fb923c;font-weight:800}
+.risk-medium{color:#fbbf24;font-weight:700}.risk-low{color:#4ade80;font-weight:600}
+.risk-noise{color:var(--muted);font-weight:500}
 """
 
-_JS = """
-function filterSev(sev) {
-  document.querySelectorAll('#tbody tr.finding-row').forEach(function(row) {
-    row.classList.toggle('hidden', sev !== 'ALL' && row.dataset.sev !== sev);
+_DASHBOARD_JS = """
+// Tab switching
+function showTab(id){
+  document.querySelectorAll('.tab-content').forEach(function(e){e.classList.remove('active');});
+  document.querySelectorAll('.tab-btn').forEach(function(e){e.classList.remove('active');});
+  document.getElementById('tab-'+id).classList.add('active');
+  document.querySelector('[data-tab="'+id+'"]').classList.add('active');
+}
+// Severity filter
+function filterSev(sev,btn){
+  var q=document.getElementById('fSearch');
+  var qv=q?q.value.toLowerCase():'';
+  document.querySelectorAll('.finding-row').forEach(function(row){
+    var sevOk=sev==='ALL'||row.dataset.sev===sev;
+    var txtOk=!qv||row.textContent.toLowerCase().includes(qv);
+    row.classList.toggle('hidden',!(sevOk&&txtOk));
   });
-  document.querySelectorAll('#tbody tr.file-row').forEach(function(fr) {
-    var next = fr.nextElementSibling;
-    var hasVisible = false;
-    while (next && next.classList.contains('finding-row')) {
-      if (!next.classList.contains('hidden')) hasVisible = true;
-      next = next.nextElementSibling;
+  _syncFileRows();
+  document.querySelectorAll('.fbtn').forEach(function(b){b.classList.remove('on');});
+  if(btn) btn.classList.add('on');
+}
+// Search
+function searchFindings(){
+  var q=document.getElementById('fSearch').value.toLowerCase();
+  var active=document.querySelector('.fbtn.on');
+  var sev=active?active.dataset.sev:'ALL';
+  document.querySelectorAll('.finding-row').forEach(function(row){
+    var sevOk=sev==='ALL'||row.dataset.sev===sev;
+    var txtOk=!q||row.textContent.toLowerCase().includes(q);
+    row.classList.toggle('hidden',!(sevOk&&txtOk));
+  });
+  _syncFileRows();
+}
+function _syncFileRows(){
+  document.querySelectorAll('.file-row').forEach(function(fr){
+    var next=fr.nextElementSibling,vis=false;
+    while(next&&next.classList.contains('finding-row')){
+      if(!next.classList.contains('hidden')) vis=true;
+      next=next.nextElementSibling;
     }
-    fr.classList.toggle('hidden', !hasVisible);
+    fr.classList.toggle('hidden',!vis);
   });
 }
+// Animated counter
+function animateCount(el,target){
+  var start=0,dur=800,step=target/dur*16;
+  function tick(){
+    start=Math.min(start+step,target);
+    el.textContent=Math.round(start);
+    if(start<target) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('[data-count]').forEach(function(el){
+    animateCount(el,parseInt(el.dataset.count)||0);
+  });
+});
 """
+
+# Keep _JS alias for to_html (scan-only, not dashboard)
+_JS = _DASHBOARD_JS
 
 
 def to_html(findings: list[Finding], repo_path: str = "", suppressed: int = 0) -> str:
@@ -416,21 +530,18 @@ def render_dashboard(
     history: list | None = None,
     verdict_map: dict | None = None,
     risk_map: dict | None = None,
+    trace_res=None,
 ) -> str:
-    """One-file HTML dashboard: cards + risk-ranked findings (+optional AI triage cols) + blast radius + history."""
+    """One-file HTML dashboard with tabbed UI: Overview · Findings · Blast Radius · History."""
     history = history or []
     s = summary(findings)
     triage = verdict_map is not None
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    mode = "AI-triaged" if triage else "offline scan"
+    repo_short = _esc(repo_path.split("/")[-1] or repo_path.split("\\")[-1] or "Dashboard")
 
-    cards = (
-        _card(s["error"], "ERROR", "#c0392b", "#fdf2f2")
-        + _card(s["warning"], "WARNING", "#d68910", "#fefaf0")
-        + _card(s["info"], "INFO", "#1a5276", "#eaf4fb")
-        + _card(suppressed, "SUPPRESSED", "#7f8c8d", "#f4f6f7")
-    )
-
+    # ── Findings table ────────────────────────────────────────────────────────
     if risk_map is not None:
-        # Risk-ranked layout: findings sorted by risk desc, noise folded.
         table = _ranked_findings_html(findings, risk_map, verdict_map)
     else:
         extra_head = "<th>Reachability</th><th>AI verdict</th>" if triage else ""
@@ -442,58 +553,394 @@ def render_dashboard(
             + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"
         )
 
-    mermaid_section = ""
-    if mermaid_src:
-        fn_note = (' <span style="font-size:12px;color:#7f8c8d;font-weight:400">' + _esc(traced_fn) + "</span>") if traced_fn else ""
-        mermaid_section = (
-            '<div class="panel" style="margin-top:20px"><div class="panel-header">'
-            '<span class="panel-title">🔗 Blast Radius — Call Graph' + fn_note + "</span></div>"
-            '<div style="padding:1.5rem;overflow-x:auto;background:#fafafa">'
-            '<pre class="mermaid">\n' + mermaid_src + "\n</pre></div></div>"
+    # ── TAB 1: Overview — premium stat cards + OWASP donut chart ─────────────
+    total = s["error"] + s["warning"] + s["info"]
+    risk_band = "CRITICAL" if s["error"] >= 5 else ("HIGH" if s["error"] >= 1 else ("MEDIUM" if s["warning"] >= 3 else "LOW"))
+    band_color = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#22c55e"}.get(risk_band, "#94a3b8")
+    band_accent = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#22c55e"}.get(risk_band, "#3b82f6")
+
+    # OWASP category breakdown for donut chart
+    from collections import Counter
+    owasp_counts: Counter = Counter()
+    for f in findings:
+        tag, _ = _owasp_tag(f.rule.rsplit(".", 1)[-1])
+        owasp_counts[tag] += 1
+    owasp_labels = list(owasp_counts.keys())
+    owasp_vals = list(owasp_counts.values())
+    donut_colors = ["#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f59e0b","#6366f1"]
+
+    ov_html = (
+        f'<div class="stat-row">'
+        f'<div class="stat-card" style="--accent:{band_accent};border-top:3px solid {band_accent}">'
+        f'<div class="num" style="color:{band_color}">{risk_band}</div>'
+        f'<div class="lbl">Overall Risk</div></div>'
+        f'<div class="stat-card" style="border-top:3px solid #ef4444">'
+        f'<div class="num" style="color:#ef4444" data-count="{s["error"]}">0</div>'
+        f'<div class="lbl">Errors</div></div>'
+        f'<div class="stat-card" style="border-top:3px solid #f97316">'
+        f'<div class="num" style="color:#f97316" data-count="{s["warning"]}">0</div>'
+        f'<div class="lbl">Warnings</div></div>'
+        f'<div class="stat-card" style="border-top:3px solid #3b82f6">'
+        f'<div class="num" style="color:#3b82f6" data-count="{s["info"]}">0</div>'
+        f'<div class="lbl">Info</div></div>'
+        f'<div class="stat-card" style="border-top:3px solid #64748b">'
+        f'<div class="num" style="color:#64748b" data-count="{suppressed}">0</div>'
+        f'<div class="lbl">Suppressed</div></div>'
+        f'</div>'
+        + ('<div class="chart-grid">' if owasp_labels else '')
+        + (
+            '<div class="chart-box"><h4>OWASP Category Breakdown</h4><canvas id="owaspChart" height="180"></canvas></div>'
+            '<div class="chart-box"><h4>Severity Distribution</h4><canvas id="sevChart" height="180"></canvas></div>'
+            if owasp_labels else ''
+        )
+        + ('</div>' if owasp_labels else '')
+        + f'<div style="margin-top:12px;color:#475569;font-size:12px;padding:4px 0">'
+          f'Scanned: <b style="color:#94a3b8">{_esc(repo_path)}</b> &nbsp;·&nbsp; {mode} &nbsp;·&nbsp; {ts}'
+          + (' &nbsp;·&nbsp; <span style="color:#a78bfa">✦ AI triage enabled</span>' if triage else '')
+          + '</div>'
+    )
+
+    # ── TAB 2: Findings — with search + filter toolbar ────────────────────────
+    toolbar = (
+        '<div class="toolbar">'
+        '<input class="search-box" id="fSearch" type="text" placeholder="🔍 Search findings…" oninput="searchFindings()">'
+        '<button class="fbtn on" data-sev="ALL" onclick="filterSev(\'ALL\',this)">ALL</button>'
+        f'<button class="fbtn" data-sev="ERROR" onclick="filterSev(\'ERROR\',this)" style="color:#fca5a5">ERROR ({s["error"]})</button>'
+        f'<button class="fbtn" data-sev="WARNING" onclick="filterSev(\'WARNING\',this)" style="color:#fdba74">WARNING ({s["warning"]})</button>'
+        f'<button class="fbtn" data-sev="INFO" onclick="filterSev(\'INFO\',this)" style="color:#93c5fd">INFO ({s["info"]})</button>'
+        '</div>'
+    )
+    findings_tab = (
+        '<div class="panel">'
+        '<div class="panel-header"><span class="panel-title">🛡 Security Findings</span>' + toolbar + '</div>'
+        + table + '</div>'
+    )
+
+    # ── TAB 3: Blast Radius — D3 interactive graph from graph_viz.py ─────────
+    fn_note = (f' <span style="font-size:11px;color:#64748b">{_esc(traced_fn)}</span>') if traced_fn else ""
+
+    # Build stats panel from trace_res
+    trace_info = ""
+    d3_graph_html = ""
+    if trace_res is not None:
+        st = trace_res.stats
+        trace_info = (
+            f'<div style="display:flex;gap:12px;margin:16px 24px;flex-wrap:wrap">'
+            f'<div style="background:rgba(255,255,255,.05);padding:8px 14px;border-radius:8px;font-size:12px"><b style="font-size:1.4rem;display:block;color:#a78bfa">{len(trace_res.changed)}</b> Changed Nodes</div>'
+            f'<div style="background:rgba(255,255,255,.05);padding:8px 14px;border-radius:8px;font-size:12px"><b style="font-size:1.4rem;display:block;color:#f97316">{st.get("functions_affected",0)}</b> Functions Affected</div>'
+            f'<div style="background:rgba(255,255,255,.05);padding:8px 14px;border-radius:8px;font-size:12px"><b style="font-size:1.4rem;display:block;color:#ef4444">{st.get("apis_affected",0)}</b> APIs Exposed</div>'
+            f'<div style="background:rgba(255,255,255,.05);padding:8px 14px;border-radius:8px;font-size:12px"><b style="font-size:1.4rem;display:block;color:#22c55e">{st.get("features_affected",0)}</b> Features Touched</div>'
+            f'<div style="background:rgba(255,255,255,.05);padding:8px 14px;border-radius:8px;font-size:12px"><b style="font-size:1.4rem;display:block;color:#64748b">{st.get("approximate",0)}</b> Approximate</div>'
+            f'</div>'
+        )
+        if trace_res.apis:
+            api_items = "".join(
+                f'<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;font-family:monospace;color:#93c5fd">'
+                f'⚡ {_esc(a["route"])} <span style="color:#64748b;float:right;font-size:11px">{_esc(a["file"])}</span></div>'
+                for a in trace_res.apis
+            )
+            trace_info += (
+                f'<div style="margin:0 24px 16px 24px;padding:12px 16px;background:rgba(10,15,30,.5);'
+                f'border:1px solid rgba(255,255,255,.05);border-radius:8px">'
+                f'<div style="font-size:11px;font-weight:700;color:#cbd5e1;text-transform:uppercase;margin-bottom:8px;letter-spacing:.06em">Affected Endpoints / Routes</div>'
+                f'{api_items}</div>'
+            )
+
+        # Try to generate D3 interactive graph
+        try:
+            from radar.graph.graph_viz import to_dependency_html
+            # Build a subgraph: only changed + affected node IDs
+            import networkx as nx
+            all_ids = {item.id for item in trace_res.changed + trace_res.affected}
+            # We need the original nx.DiGraph — trace_res doesn't hold it, so we
+            # reconstruct a minimal graph from the ImpactItems for visualization
+            sub = nx.DiGraph()
+            for item in trace_res.changed + trace_res.affected:
+                sub.add_node(item.id, name=item.name, kind=item.kind,
+                             file=item.file, start_line=item.line)
+            # Add edges from parent relationships
+            for item in trace_res.affected:
+                if item.parent and item.parent in all_ids:
+                    sub.add_edge(item.parent, item.id, kind="calls")
+            d3_graph_html = to_dependency_html(sub, repo_path=repo_path)
+        except Exception as _d3_exc:
+            d3_graph_html = ""
+
+    if d3_graph_html:
+        # Extract nodes/edges JSON from subgraph and embed D3 inline
+        # (srcdoc iframe breaks JS due to HTML entity escaping)
+        try:
+            import json as _json
+            from radar.graph.graph_viz import _file_color, _short_name
+
+            _PALETTE = [
+                "#3498db","#e74c3c","#2ecc71","#f39c12","#9b59b6",
+                "#1abc9c","#e67e22","#34495e","#e91e63","#00bcd4",
+                "#8bc34a","#ff5722","#607d8b","#795548","#ffc107",
+                "#673ab7","#009688","#ff9800","#4caf50","#f44336",
+            ]
+            _fc: dict = {}
+            def _col(f):
+                if f not in _fc:
+                    _fc[f] = _PALETTE[len(_fc) % len(_PALETTE)]
+                return _fc[f]
+
+            nidx: dict = {}
+            ns_out = []
+            for i, nid in enumerate(sorted(sub.nodes)):
+                d = sub.nodes[nid]
+                kind = d.get("kind", "function")
+                ns_out.append({
+                    "id": i, "nid": nid,
+                    "name": _short_name(d.get("name", nid)),
+                    "full": d.get("name", nid),
+                    "file": d.get("file", ""),
+                    "kind": kind,
+                    "line": d.get("start_line", 0),
+                    "color": _col(d.get("file", "")),
+                    "r": 10 if kind == "route" else (7 if kind == "function" else 5),
+                })
+                nidx[nid] = i
+            es_out = []
+            for src, dst, edata in sub.edges(data=True):
+                if src in nidx and dst in nidx:
+                    k = edata.get("kind", "calls")
+                    es_out.append({"source": nidx[src], "target": nidx[dst], "kind": k, "dashed": k != "calls"})
+
+            from radar.graph.graph_viz import _d3_script_tag
+            d3_script = _d3_script_tag()
+
+            nodes_js = _json.dumps(ns_out)
+            edges_js = _json.dumps(es_out)
+
+            blast_graph_section = f"""
+<div style="margin:0 24px 24px 24px;border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden">
+  <div style="padding:10px 16px;background:rgba(10,15,30,.6);font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.06em">
+    🕸 Interactive D3 Force Graph &nbsp;·&nbsp; {len(ns_out)} nodes &nbsp;·&nbsp; {len(es_out)} edges &nbsp;·&nbsp; drag · scroll · hover · search
+  </div>
+  {d3_script}
+  <div style="position:relative;background:#0f1923">
+    <input id="d3search" placeholder="Search function / file…"
+      style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:5;
+             background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+             border-radius:6px;color:#cdd6e0;padding:5px 12px;font-size:12px;width:220px;outline:none">
+    <svg id="d3canvas" style="width:100%;height:580px;display:block"></svg>
+    <div id="d3tip" style="position:absolute;background:rgba(10,18,28,.95);border:1px solid rgba(74,158,218,.3);
+         border-radius:6px;padding:10px 14px;font-size:12px;line-height:1.6;
+         pointer-events:none;display:none;z-index:20;max-width:320px;color:#cdd6e0"></div>
+  </div>
+  <script>
+  (function(){{
+    var NODES={nodes_js};
+    var EDGES={edges_js};
+    var svg=d3.select('#d3canvas');
+    var W=svg.node().getBoundingClientRect().width||900,H=580;
+    svg.attr('width',W).attr('height',H);
+    var g=svg.append('g');
+    var zoom=d3.zoom().scaleExtent([.05,8]).on('zoom',function(e){{g.attr('transform',e.transform);}});
+    svg.call(zoom);
+    var sim=d3.forceSimulation(NODES)
+      .force('link',d3.forceLink(EDGES).id(function(d){{return d.id;}}).distance(function(d){{return d.dashed?90:55;}}).strength(0.5))
+      .force('charge',d3.forceManyBody().strength(-160))
+      .force('center',d3.forceCenter(W/2,H/2))
+      .force('collide',d3.forceCollide(function(d){{return d.r+5;}}));
+    var defs=svg.append('defs');
+    ['calls','imports','handles'].forEach(function(k){{
+      var col=k==='calls'?'#4a9eda':k==='imports'?'#f39c12':'#2ecc71';
+      defs.append('marker').attr('id','d3arr-'+k)
+        .attr('viewBox','0 -4 8 8').attr('refX',14).attr('refY',0)
+        .attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
+        .append('path').attr('d','M0,-4L8,0L0,4').attr('fill',col).attr('opacity',.7);
+    }});
+    var link=g.append('g').selectAll('line').data(EDGES).enter().append('line')
+      .attr('stroke',function(d){{return d.kind==='calls'?'#4a9eda':d.kind==='imports'?'#f39c12':'#2ecc71';}})
+      .attr('stroke-opacity',.55).attr('stroke-width',function(d){{return d.kind==='handles'?1.4:1.2;}})
+      .attr('stroke-dasharray',function(d){{return d.dashed?'4,3':null;}})
+      .attr('marker-end',function(d){{return 'url(#d3arr-'+d.kind+')';}});
+    var node=g.append('g').selectAll('g').data(NODES).enter().append('g')
+      .call(d3.drag()
+        .on('start',function(e,d){{if(!e.active)sim.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y;}})
+        .on('drag',function(e,d){{d.fx=e.x;d.fy=e.y;}})
+        .on('end',function(e,d){{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null;}}));
+    node.append('circle')
+      .attr('r',function(d){{return d.r;}})
+      .attr('fill',function(d){{return d.color;}})
+      .attr('stroke',function(d){{return d.kind==='route'?'#fff':'#0f1923';}})
+      .attr('stroke-width',function(d){{return d.kind==='route'?2:1.5;}});
+    node.filter(function(d){{return d.r>=7;}}).append('text')
+      .attr('dy',function(d){{return d.r+10;}})
+      .attr('text-anchor','middle')
+      .style('font-size','9px').style('fill','#cdd6e0').style('pointer-events','none')
+      .text(function(d){{return d.name.length>18?d.name.slice(0,17)+'\\u2026':d.name;}});
+    var tip=document.getElementById('d3tip');
+    node.on('mousemove',function(e,d){{
+      tip.style.display='block';
+      tip.style.left=(e.offsetX+14)+'px';
+      tip.style.top=(e.offsetY-10)+'px';
+      tip.innerHTML='<b style="color:#4a9eda">'+d.full+'</b><br><span style="color:#7f9db0">File: '+d.file+'</span><br><span style="color:#7f9db0">Kind: '+d.kind+' | Line: '+d.line+'</span>';
+    }}).on('mouseleave',function(){{tip.style.display='none';}});
+    sim.on('tick',function(){{
+      link.attr('x1',function(d){{return d.source.x;}}).attr('y1',function(d){{return d.source.y;}})
+          .attr('x2',function(d){{return d.target.x;}}).attr('y2',function(d){{return d.target.y;}});
+      node.attr('transform',function(d){{return 'translate('+d.x+','+d.y+')';}});
+    }});
+    sim.on('end',function(){{
+      var b=g.node().getBBox();
+      if(!b.width||!b.height)return;
+      var pad=40,sc=Math.min((W-pad*2)/b.width,(H-pad*2)/b.height,1.5);
+      var tx=W/2-sc*(b.x+b.width/2),ty=H/2-sc*(b.y+b.height/2);
+      svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity.translate(tx,ty).scale(sc));
+    }});
+    document.getElementById('d3search').addEventListener('input',function(){{
+      var q=this.value.trim().toLowerCase();
+      node.selectAll('circle').attr('opacity',function(d){{
+        return (!q||d.name.toLowerCase().includes(q)||d.file.toLowerCase().includes(q))?1:.08;
+      }});
+    }});
+  }})();
+  </script>
+</div>"""
+        except Exception as _inline_exc:
+            # Fallback: srcdoc iframe
+            import html as _html_mod
+            blast_graph_section = (
+                f'<div style="margin:0 24px 24px;border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden">'
+                f'<iframe srcdoc="{_html_mod.escape(d3_graph_html, quote=True)}" style="width:100%;height:580px;border:none"></iframe>'
+                f'</div>'
+            )
+    elif mermaid_src:
+        blast_graph_section = '<div class="mermaid-wrap"><pre class="mermaid">' + mermaid_src + '</pre></div>'
+    else:
+        blast_graph_section = ""
+
+    if mermaid_src or d3_graph_html:
+        blast_tab = (
+            '<div class="panel"><div class="panel-header">'
+            f'<span class="panel-title">🔗 Blast Radius — Impact Graph{fn_note}</span>'
+            '<span style="font-size:11px;color:#64748b">Functions and routes affected by the change</span></div>'
+            + trace_info
+            + blast_graph_section
+            + '</div>'
+        )
+    else:
+        blast_tab = (
+            '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;gap:16px;color:#475569">'
+            '<div style="font-size:3rem">🔗</div>'
+            '<div style="font-weight:700;font-size:16px;color:#64748b">No Blast Radius Data</div>'
+            '<div style="font-size:13px;text-align:center">Specify <code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">--function</code> or '
+            '<code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">--diff</code> when running the analysis.</div>'
+            '</div>'
         )
 
-    history_section = ""
+    # ── TAB 4: History — Chart.js line chart ─────────────────────────────────
     chart_script = ""
     if history:
-        history_section = (
-            '<div class="panel" style="margin-top:20px"><div class="panel-header">'
-            '<span class="panel-title">📈 Scan History Trend</span></div>'
-            '<div style="padding:1.5rem"><canvas id="hChart" height="70"></canvas></div></div>'
+        hist_tab = (
+            '<div class="panel"><div class="panel-header"><span class="panel-title">📈 Scan History Trend</span>'
+            f'<span style="font-size:11px;color:#64748b">{len(history)} scan(s) recorded</span></div>'
+            '<div style="padding:24px"><canvas id="hChart" height="90"></canvas></div></div>'
         )
-        chart_script = (
-            '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>'
-            "<script>new Chart(document.getElementById('hChart'),{type:'line',data:{labels:"
+        chart_script = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script><script>'
+        chart_script += (
+            "var _cjsDefaults={color:'#94a3b8',borderColor:'rgba(255,255,255,.05)'};"
+            "Chart.defaults.color=_cjsDefaults.color;"
+            "new Chart(document.getElementById('hChart'),{type:'line',data:{labels:"
             + json.dumps([e["ts"] for e in history])
             + ",datasets:[{label:'ERROR',data:" + json.dumps([e["error"] for e in history])
-            + ",borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,0.08)',tension:0.3,fill:true},"
+            + ",borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointBackgroundColor:'#ef4444'},"
             + "{label:'WARNING',data:" + json.dumps([e["warning"] for e in history])
-            + ",borderColor:'#d68910',backgroundColor:'rgba(214,137,16,0.08)',tension:0.3,fill:true}]},"
-            + "options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});</script>"
+            + ",borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',tension:.4,fill:true,pointBackgroundColor:'#f97316'}]},"
+            + "options:{responsive:true,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'top',"
+            + "labels:{color:'#94a3b8',usePointStyle:true}}},"
+            + "scales:{x:{ticks:{color:'#64748b'},grid:{color:'rgba(255,255,255,.04)'}},"
+            + "y:{beginAtZero:true,ticks:{color:'#64748b',stepSize:1},grid:{color:'rgba(255,255,255,.04)'}}}}});"
         )
+        if owasp_labels:
+            chart_script += (
+                "new Chart(document.getElementById('owaspChart'),{type:'doughnut',data:{labels:"
+                + json.dumps(owasp_labels)
+                + ",datasets:[{data:" + json.dumps(owasp_vals)
+                + ",backgroundColor:" + json.dumps(donut_colors[:len(owasp_labels)])
+                + ",borderWidth:0,hoverOffset:6}]},"
+                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}},"
+                + "tooltip:{callbacks:{label:function(c){return c.label+': '+c.raw+' finding'+(c.raw!==1?'s':'');}}}},"
+                + "cutout:'68%'}});"
+                + "new Chart(document.getElementById('sevChart'),{type:'doughnut',data:{labels:['ERROR','WARNING','INFO'],"
+                + "datasets:[{data:" + json.dumps([s["error"], s["warning"], s["info"]])
+                + ",backgroundColor:['#ef4444','#f97316','#3b82f6'],borderWidth:0,hoverOffset:6}]},"
+                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}}},"
+                + "cutout:'68%'}});"
+            )
+        chart_script += "</script>"
+    else:
+        hist_tab = (
+            '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;gap:16px;color:#475569">'
+            '<div style="font-size:3rem">📈</div>'
+            '<div style="font-weight:700;font-size:16px;color:#64748b">No History Yet</div>'
+            '<div style="font-size:13px">Run <code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">radar report</code> again after future scans to see trends.</div>'
+            '</div>'
+        )
+        # Still build donut charts on overview even without history
+        if owasp_labels:
+            chart_script = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script><script>'
+            chart_script += (
+                "new Chart(document.getElementById('owaspChart'),{type:'doughnut',data:{labels:"
+                + json.dumps(owasp_labels)
+                + ",datasets:[{data:" + json.dumps(owasp_vals)
+                + ",backgroundColor:" + json.dumps(donut_colors[:len(owasp_labels)])
+                + ",borderWidth:0,hoverOffset:6}]},"
+                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}},"
+                + "tooltip:{callbacks:{label:function(c){return c.label+': '+c.raw+' finding'+(c.raw!==1?'s':'');}}}},"
+                + "cutout:'68%'}});"
+                + "new Chart(document.getElementById('sevChart'),{type:'doughnut',data:{labels:['ERROR','WARNING','INFO'],"
+                + "datasets:[{data:" + json.dumps([s["error"], s["warning"], s["info"]])
+                + ",backgroundColor:['#ef4444','#f97316','#3b82f6'],borderWidth:0,hoverOffset:6}]},"
+                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}}},"
+                + "cutout:'68%'}});"
+                + "</script>"
+            )
 
     mermaid_script = (
         '<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";'
-        "mermaid.initialize({startOnLoad:true,theme:'default'});</script>"
+        "mermaid.initialize({startOnLoad:true,theme:'dark'});</script>"
         if mermaid_src else ""
     )
 
-    mode = "AI-triaged" if triage else "offline scan"
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    # ── Assemble tab bar with finding count badges ────────────────────────────
+    tabs = [
+        ("overview", "📊 Overview", ""),
+        ("findings", "🛡 Findings", f'<span class="cnt">{total}</span>'),
+        ("blast",    "🔗 Blast Radius", ""),
+        ("history",  "📈 History", f'<span class="cnt">{len(history)}</span>' if history else ""),
+    ]
+    tab_bar = '<div class="tabs">' + "".join(
+        f'<button class="tab-btn{" active" if i == 0 else ""}" data-tab="{tid}" onclick="showTab(\'{tid}\')">{label}{badge}</button>'
+        for i, (tid, label, badge) in enumerate(tabs)
+    ) + "</div>"
+
+    tab_contents = (
+        f'<div id="tab-overview" class="tab-content active">{ov_html}</div>'
+        f'<div id="tab-findings" class="tab-content">{findings_tab}</div>'
+        f'<div id="tab-blast" class="tab-content">{blast_tab}</div>'
+        f'<div id="tab-history" class="tab-content">{hist_tab}</div>'
+    )
+
     return (
-        '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
-        "<title>security-radar — Dashboard</title>\n<style>" + _CSS + "</style>\n</head>\n<body>\n"
-        '<div class="header"><h1>⚡ security-radar — Dashboard</h1>'
-        '<div class="meta">' + _esc(repo_path) + " &nbsp;·&nbsp; " + mode + " &nbsp;·&nbsp; " + ts + "</div></div>\n"
-        '<div class="cards">' + cards + "</div>\n"
-        '<div class="panel"><div class="panel-header"><span class="panel-title">🛡 Findings</span>'
-        "<div>"
-        "<button onclick=\"filterSev('ALL')\" style=\"margin:0 4px;padding:4px 12px;border:2px solid #34495e;background:#34495e;color:white;border-radius:20px;cursor:pointer;font-weight:600\">ALL</button>"
-        "<button onclick=\"filterSev('ERROR')\" style=\"margin:0 4px;padding:4px 12px;border:2px solid #e74c3c;background:white;color:#e74c3c;border-radius:20px;cursor:pointer;font-weight:600\">ERROR</button>"
-        "<button onclick=\"filterSev('WARNING')\" style=\"margin:0 4px;padding:4px 12px;border:2px solid #f39c12;background:white;color:#f39c12;border-radius:20px;cursor:pointer;font-weight:600\">WARNING</button>"
-        "</div></div>" + table + "</div>\n"
-        + mermaid_section + history_section
-        + "\n<footer>Generated by security-radar</footer>\n"
-        "<script>" + _JS + "</script>\n" + chart_script + mermaid_script
+        '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
+        '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+        f"<title>security-radar — {repo_short}</title>\n"
+        f"<style>{_CSS}</style>\n</head>\n<body>\n"
+        f'<div class="header">'
+        f'<h1>⚡ security-radar</h1>'
+        f'<div class="meta">{_esc(repo_path)}'
+        f'<span class="badge-mode">{mode}</span></div></div>\n'
+        + tab_bar
+        + tab_contents
+        + '<footer>Generated by <b>security-radar</b> &nbsp;·&nbsp; '
+          f'<a href="#" onclick="showTab(\'overview\');return false">↑ top</a></footer>\n'
+        + f"<script>{_DASHBOARD_JS}</script>\n"
+        + chart_script + mermaid_script
         + "\n</body></html>"
     )
+
+

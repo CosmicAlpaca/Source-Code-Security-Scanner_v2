@@ -445,6 +445,7 @@ def watch(path, extra_exts) -> None:
 @click.option("--rules-only", is_flag=True, help="Offline scan — only bundled custom rules")
 @click.option("--function", "function_name", default=None,
               help="Function to trace blast radius for (default: auto-pick top ERROR finding)")
+@click.option("--diff", default=None, help="Trace blast radius from git diff (e.g. origin/main...HEAD)")
 @click.option("--triage", "do_triage", is_flag=True,
               help="Add AI-triage columns (reachability + verdict). Needs OPENAI_API_KEY; opt-in.")
 @click.option("--floor", type=click.Choice(["error", "warning", "info"]), default="warning",
@@ -452,7 +453,7 @@ def watch(path, extra_exts) -> None:
 @click.option("--force", is_flag=True, help="With --triage: ignore cached verdicts and re-query the model")
 @click.option("--out", "out_file", default=None,
               help="Output HTML path (default: <path>/radar-dashboard.html)")
-def report(path, rules_only, function_name, do_triage, floor, force, out_file) -> None:
+def report(path, rules_only, function_name, diff, do_triage, floor, force, out_file) -> None:
     """Generate a unified HTML dashboard: findings + impact graph + history trend.
 
     Add --triage to enrich each finding with reachability + an AI verdict column
@@ -516,6 +517,7 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
     mermaid_src = ""
     trace_label = None
     graph = None
+    trace_res = None
     console.print("[dim]② building call graph…[/]")
     try:
         from radar.config import load_config
@@ -528,6 +530,14 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
         if function_name:
             node_ids = find_function_nodes(graph, function_name)
             trace_label = "function: " + function_name
+        elif diff:
+            from radar.impact.diff_mapper import changed_lines
+            changes = changed_lines(root, rev=diff)
+            node_ids = map_to_nodes(graph, changes) if changes else []
+            if node_ids:
+                trace_label = "diff: " + diff
+            else:
+                trace_label = "diff: " + diff + " (no changed functions found)"
         else:
             # Auto: blast radius of the functions that CONTAIN the findings
             # (severity-first, capped) — by location, not by rule name.
@@ -540,7 +550,8 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
             if node_ids:
                 trace_label = str(len(node_ids)) + " finding site(s)"
         if node_ids:
-            mermaid_src = to_mermaid(trace(graph, node_ids))
+            trace_res = trace(graph, node_ids)
+            mermaid_src = to_mermaid(trace_res)
     except Exception as exc:
         console.print(f"[dim yellow]⚠ impact graph skipped: {exc}[/]")
 
@@ -554,7 +565,7 @@ def report(path, rules_only, function_name, do_triage, floor, force, out_file) -
     html = render_dashboard(
         repo_path=str(root), findings=items, suppressed=len(suppressed),
         mermaid_src=mermaid_src, traced_fn=trace_label, history=history,
-        verdict_map=verdict_map, risk_map=risk_map,
+        verdict_map=verdict_map, risk_map=risk_map, trace_res=trace_res,
     )
     dest.write_text(html, encoding="utf-8")
 

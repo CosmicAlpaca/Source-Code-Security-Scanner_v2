@@ -4,17 +4,23 @@ GitHub Repository Security & Impact Analyzer (Interactive)
 
 Usage:
   python scripts/analyze-github.py
+  python scripts/analyze-github.py --url https://github.com/org/repo
+  python scripts/analyze-github.py --url <url> --branch feature/my-branch
+  python scripts/analyze-github.py --url <url> --function validate_user
 
 Prompts interactively for a GitHub URL, optional branch, and optional function name.
-Then runs security scan + impact analysis and saves all results to `analysis_results/`.
+Runs a FULL analysis (OWASP scan + call graph + blast radius) and outputs ONE
+unified HTML dashboard.
 
 Repos are cached in `analysis_repos/<repo_name>/` — cloning is skipped if the repo
 already exists there; only git fetch + checkout is performed to update.
 
-Output files:
-  analysis_results/<repo>_semgrep_results.json   — OWASP / custom rule findings (JSON)
-  analysis_results/<repo>_impact_graph.html      — interactive impact graph (HTML)
-  analysis_results/<repo>_impact_graph.md        — Mermaid diagram (Markdown)
+Output:
+  analysis_results/<repo>_unified_dashboard.html  — unified HTML dashboard:
+      * OWASP Top 10 findings table (severity, location, rule)
+      * Blast radius / impact graph (Mermaid diagram)
+      * Scan history trend chart
+      * AI triage columns (opt-in: set OPENAI_API_KEY)
 """
 
 import argparse
@@ -92,20 +98,6 @@ def validate_inputs(url: str, branch: str | None, func_name: str | None) -> None
             sys.exit(1)
 
 
-def impact_to_file(cmd: list[str], cwd: Path, out: Path, label: str, wrap=None) -> None:
-    """Run an impact command; write `out` only if it produced output (no empty files).
-
-    cmd carries user input (func_name/branch) already checked by validate_inputs();
-    list-form subprocess, no shell.
-    """
-    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)  # nosemgrep: dangerous-subprocess-use-tainted-env-args
-    stdout = proc.stdout or ""
-    if not stdout.strip():
-        console.print(f"   [yellow]Khong co anh huong — bo qua {label}[/]")
-        return
-    out.write_text(wrap(stdout) if wrap else stdout, encoding="utf-8")
-    console.print(f"   [green]{label}:[/] [cyan]{out}[/]")
-
 
 # ──────────────────────────── main ────────────────────────────
 
@@ -163,9 +155,7 @@ def main() -> None:
 
     out_dir = Path.cwd() / "analysis_results"
     out_dir.mkdir(exist_ok=True)
-    scan_json   = out_dir / f"{repo_name}_semgrep_results.json"
-    impact_html = out_dir / f"{repo_name}_impact_graph.html"
-    impact_md   = out_dir / f"{repo_name}_impact_graph.md"
+    unified_html = out_dir / f"{repo_name}_unified_dashboard.html"
 
     console.print(f"\n[dim]Repo: [cyan]{repo_name}[/]  |  Branch: [cyan]{branch or '(default)'}[/]  |  Func: [cyan]{func_name or '(none)'}[/][/]")
 
@@ -189,58 +179,54 @@ def main() -> None:
             console.print(f"   Checkout nhanh: [cyan]{branch}[/]")
             run_cmd(["git", "checkout", branch], cwd=repo_dir)
 
-    # ─── STEP 2 — Security scan ──────────────────────────────────────────────
-    console.print("\n[bold blue]2.[/] Quet bao mat (OWASP Top 10 + Custom Rules)...")
-
-    # Display in terminal
-    subprocess.run(radar_base + ["scan", "."], cwd=repo_dir, check=False)
-
-    # Save JSON report
-    with open(scan_json, "w", encoding="utf-8") as fh:
-        subprocess.run(
-            radar_base + ["scan", ".", "--format", "json"],
-            cwd=repo_dir, stdout=fh, check=False,
-        )
-    console.print(f"   [green]Ket qua quet luu vao:[/] [cyan]{scan_json}[/]")
-
-    # ─── STEP 3 — Impact analysis ────────────────────────────────────────────
-    console.print("\n[bold blue]3.[/] Phan tich ban do anh huong (Impact Graph)...")
-
+    # ─── STEP 2 — Unified Security Scan & Impact Analysis ────────────────────
+    console.print("\n[bold blue]2.[/] Quet bao mat & Ve ban do anh huong (Unified Dashboard)...")
+    
+    # Build report command — --triage is opt-in (requires OPENAI_API_KEY)
+    _triage_flag = ["--triage"] if os.environ.get("OPENAI_API_KEY") else []
+    report_cmd = radar_base + ["report"] + _triage_flag + ["--out", str(unified_html)]
+    
     if func_name:
         console.print(f"   [dim]Truy vet ham: {func_name}[/]")
-        base = radar_base + ["impact", "--function", func_name, "--path", "."]
-        # terminal tree (func_name validated by validate_inputs() above; no shell)
-        subprocess.run(base, cwd=repo_dir, check=False)  # nosemgrep: dangerous-subprocess-use-tainted-env-args
-        impact_to_file(base + ["--format", "html"], repo_dir, impact_html, "HTML")
-        impact_to_file(
-            base + ["--format", "mermaid"], repo_dir, impact_md, "Mermaid MD",
-            wrap=lambda s: f"```mermaid\n{s}\n```",
-        )
-
+        report_cmd += ["--function", func_name]
     elif branch:
-        console.print(f"   [dim]Diff nhanh '{branch}' vs origin/main...[/]")
-        # detect default branch
+        default_branch = "main"
         try:
-            run_cmd(["git", "fetch", "origin", "main"], cwd=repo_dir, capture=True)
-            diff_target = "origin/main...HEAD"
+            res = subprocess.run(
+                ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+                cwd=repo_dir, capture_output=True, text=True, check=True
+            )
+            default_branch = res.stdout.strip().rsplit("/", 1)[-1]
+        except Exception:
+            pass
+
+        console.print(f"   [dim]Diff nhanh '{branch}' vs default branch '{default_branch}'...[/]")
+        try:
+            run_cmd(["git", "fetch", "origin", default_branch], cwd=repo_dir, capture=True)
+            diff_target = f"origin/{default_branch}...HEAD"
         except SystemExit:
-            diff_target = "HEAD~1"
-
-        base = radar_base + ["impact", "--diff", diff_target, "--path", "."]
-        subprocess.run(base, cwd=repo_dir, check=False)
-        impact_to_file(base + ["--format", "html"], repo_dir, impact_html, "HTML")
-
+            # Fallback to master if default_branch fetch failed or was incorrect
+            if default_branch != "master":
+                try:
+                    run_cmd(["git", "fetch", "origin", "master"], cwd=repo_dir, capture=True)
+                    diff_target = "origin/master...HEAD"
+                except SystemExit:
+                    diff_target = "HEAD~1"
+            else:
+                diff_target = "HEAD~1"
+        report_cmd += ["--diff", diff_target]
     else:
-        console.print("   [dim]Khong co branch/func — chi build graph tong quan...[/]")
-        subprocess.run(radar_base + ["build", "."], cwd=repo_dir, check=False)
-        console.print("   [dim](Xuat file HTML/MD khi chon --branch hoac --function)[/]")
+        console.print("   [dim]Khong co branch/func — quet tong quan + auto blast radius tu findings...[/]")
+
+    # Run unified report generator (which internally scans, triages, builds graph, and renders HTML)
+    subprocess.run(report_cmd, cwd=repo_dir, check=False)
 
     # ─── Done ────────────────────────────────────────────────────────────────
     console.print(
         Panel(
             f"[bold green]Hoan tat![/]\n"
-            f"File phan tich: [cyan]{out_dir}[/]\n"
-            f"Cache repo:     [cyan]{repo_dir}[/]",
+            f"Dashboard (unified): [cyan]{unified_html}[/]\n"
+            f"Cache repo:          [cyan]{repo_dir}[/]",
             expand=False,
         )
     )
