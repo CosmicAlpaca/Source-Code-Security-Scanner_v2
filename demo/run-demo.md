@@ -102,6 +102,19 @@ radar triage demo --fail-on exploitable   # exit≠0 nếu AI verdict = exploita
 
 AI verdict **ghi đè** thứ hạng: `exploitable` → ép lên `critical`; `false_positive` → rớt xuống fold. Reasoning + exploit-path hiện qua tooltip.
 
+### A5. Dependency graph — bản đồ phụ thuộc tương tác
+
+Xuất **1 file HTML self-contained** (D3 nhúng sẵn, mở offline, không cần server):
+
+```bash
+radar graph demo                       # mặc định: gom theo FILE — nhẹ, mở repo to không lag
+radar graph demo --level function      # đồ thị hàm đầy đủ (chi tiết, nặng hơn)
+radar graph demo --focus security      # chỉ subgraph reachable từ route (mặt phẳng tấn công)
+radar graph demo --max-nodes 800       # giới hạn node (giữ node bậc cao nhất; 0 = không giới hạn)
+```
+
+Mặc định **mức file** để repo lớn (chục nghìn hàm) vẫn mở mượt: layout được tính sẵn rồi vẽ tĩnh (không animate). Khi cap kích hoạt, CLI in rõ số node bị bỏ. Các cờ này chỉ là **bộ lọc lúc hiển thị** — không ảnh hưởng `impact`/`report`/`triage` hay cache `graph.json`.
+
 ---
 
 ## B — Demo CI trên GitHub (PR)

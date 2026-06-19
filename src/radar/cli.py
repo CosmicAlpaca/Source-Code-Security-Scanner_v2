@@ -590,14 +590,40 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
               help="Use existing graph.json (skip auto-build)")
 @click.option("--out", "out_file", default=None,
               help="Output HTML path (default: <path>/radar-graph.html)")
-def graph_cmd(path, graph_path, out_file) -> None:
-    """Render the full dependency/call graph as an interactive HTML page."""
+@click.option("--level", type=click.Choice(["file", "function"]), default="file",
+              help="Aggregation level: 'file' (default, scales to big repos) or 'function'")
+@click.option("--focus", type=click.Choice(["none", "security"]), default="none",
+              help="'security' keeps only the subgraph reachable from route entrypoints")
+@click.option("--max-nodes", "max_nodes", type=int, default=1500,
+              help="Cap rendered nodes (keeps highest-degree; 0 = no cap). Default 1500")
+def graph_cmd(path, graph_path, out_file, level, focus, max_nodes) -> None:
+    """Render the dependency/call graph as an interactive HTML page.
+
+    Defaults to a file-level view so large repos stay responsive. Use
+    --level function for the full call graph, --focus security to see only the
+    route-reachable attack surface.
+    """
+    from radar.graph.graph_transform import aggregate_by_file, cap_nodes, focus_security
     from radar.graph.graph_viz import to_dependency_html
 
     root = Path(path).resolve()
     dest = Path(out_file).resolve() if out_file else root / "radar-graph.html"
 
     g = _load_or_build_graph(root, Path(graph_path).resolve() if graph_path else None)
+
+    # Render-only transforms — applied to a copy, never persisted. Order matters:
+    # focus first (on the full function graph), then aggregate, then cap.
+    if focus == "security":
+        g, had_routes = focus_security(g)
+        if not had_routes:
+            console.print("[yellow]⚠ no route nodes found — showing full graph[/]")
+    if level == "file":
+        g = aggregate_by_file(g)
+    g, dropped = cap_nodes(g, max_nodes)
+    if dropped:
+        console.print(
+            f"[yellow]⚠ capped to {max_nodes} nodes ({dropped} dropped, lowest-degree first)[/]"
+        )
 
     console.print("[dim]rendering dependency graph…[/]")
     html = to_dependency_html(g, repo_path=str(root))
@@ -607,7 +633,8 @@ def graph_cmd(path, graph_path, out_file) -> None:
     e = g.number_of_edges()
     console.print(
         f"[bold green]✓[/] Graph → [cyan]{dest}[/]\n"
-        f"   {n} nodes · {e} edges — open in browser, zoom/pan/click to explore"
+        f"   {n} nodes · {e} edges · level={level} focus={focus}"
+        " — open in browser, zoom/pan/click to explore"
     )
 
 

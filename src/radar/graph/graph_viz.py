@@ -52,6 +52,17 @@ def _short_name(name: str, max_len: int = 30) -> str:
     return name if len(name) <= max_len else "…" + name[-(max_len - 1):]
 
 
+def _radius(kind: str, members: int) -> float:
+    """Node radius. File nodes scale with member count so big files read bigger."""
+    if kind == "route":
+        return 10
+    if kind == "function":
+        return 7
+    if kind == "file":
+        return round(min(8 + members ** 0.5 * 1.6, 26), 1)
+    return 5
+
+
 def to_dependency_html(graph: nx.DiGraph, repo_path: str = "") -> str:
     """Return a self-contained HTML page with an interactive D3 force graph."""
 
@@ -73,7 +84,8 @@ def to_dependency_html(graph: nx.DiGraph, repo_path: str = "") -> str:
             "kind":  kind,
             "line":  data.get("start_line", 0),
             "color": _file_color(file, file_colors),
-            "r":     10 if kind == "route" else (7 if kind == "function" else 5),
+            "members": data.get("members", 0),
+            "r":     _radius(kind, data.get("members", 0)),
         })
         node_index[nid] = i
 
@@ -90,10 +102,12 @@ def to_dependency_html(graph: nx.DiGraph, repo_path: str = "") -> str:
             "dashed": kind != CALLS,
         })
 
-    # ── Legend: file → color (top 15 files by node count) ───────────────────
+    # ── Legend: file → color (top 15 files by function count) ───────────────
+    # `members` (file-level nodes) counts the functions a file owns; fall back to
+    # 1 per node for the function-level view where each node is one function.
     file_count: dict[str, int] = {}
     for n in nodes_json:
-        file_count[n["file"]] = file_count.get(n["file"], 0) + 1
+        file_count[n["file"]] = file_count.get(n["file"], 0) + max(n.get("members", 0), 1)
     top_files = sorted(file_count, key=lambda f: -file_count[f])[:15]
     legend_items = json.dumps([
         {"file": f, "color": file_colors.get(f, "#999"), "count": file_count[f]}
@@ -246,9 +260,7 @@ _HTML_TEMPLATE = (
     'const node = g.append(\'g\').selectAll(\'g\').data(NODES).enter().append(\'g\')\n'
     '  .attr(\'class\',\'node\')\n'
     '  .call(d3.drag()\n'
-    '    .on(\'start\',(e,d)=>{ if(!e.active) sim.alphaTarget(.3).restart(); d.fx=d.x; d.fy=d.y; })\n'
-    '    .on(\'drag\', (e,d)=>{ d.fx=e.x; d.fy=e.y; })\n'
-    '    .on(\'end\',  (e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));\n'
+    '    .on(\'drag\', (e,d)=>{ d.x=e.x; d.y=e.y; drawPositions(); }));\n'
     '\n'
     'node.append(\'circle\')\n'
     '  .attr(\'r\', d=>d.r).attr(\'fill\', d=>d.color)\n'
@@ -314,12 +326,17 @@ _HTML_TEMPLATE = (
     'node.on(\'click\',(e,d)=>{ e.stopPropagation(); setHighlight(selected===d?null:d,null); });\n'
     'svg.on(\'click\',()=>setHighlight(null,null));\n'
     '\n'
-    'sim.on(\'tick\',()=>{\n'
+    '// Frozen layout: compute positions headless once, render statically. No\n'
+    '// per-frame animation -> large graphs open without locking the tab.\n'
+    'function drawPositions(){\n'
     '  link.attr(\'x1\',d=>d.source.x).attr(\'y1\',d=>d.source.y)\n'
     '      .attr(\'x2\',d=>d.target.x).attr(\'y2\',d=>d.target.y);\n'
     '  node.attr(\'transform\',d=>\'translate(\'+d.x+\',\'+d.y+\')\');\n'
-    '});\n'
-    'sim.on(\'end\',fitView);\n'
+    '}\n'
+    'sim.stop();\n'
+    'for(let i=0;i<300;i++) sim.tick();\n'
+    'drawPositions();\n'
+    'fitView();\n'
     '\n'
     '// FIX 4: search highlights + pans camera\n'
     'document.getElementById(\'search\').addEventListener(\'input\',function(){\n'
@@ -346,12 +363,11 @@ _HTML_TEMPLATE = (
     '  lb.appendChild(el);\n'
     '});\n'
     '\n'
-    '// FIX 1: resize updates svg size + simulation center\n'
+    '// Resize only updates the SVG viewport; layout is frozen so no re-simulation.\n'
     'window.addEventListener(\'resize\',()=>{\n'
     '  svg.attr(\'width\',vw()).attr(\'height\',vh());\n'
-    '  sim.force(\'center\',d3.forceCenter(vw()/2,vh()/2)).alpha(0.1).restart();\n'
     '});\n'
-    '<\/script>\n'
+    '</script>\n'
     '</body>\n'
     '</html>\n'
 )

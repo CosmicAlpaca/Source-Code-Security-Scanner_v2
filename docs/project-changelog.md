@@ -38,6 +38,24 @@ Biến AI triage (trước đây là 1 cột thụ động, ẩn sau API key) th
 
 - +24 test (`test_risk.py`, `test_triage_ranking.py`, mở rộng dashboard/prompt). Toàn bộ **217 pass**.
 
+## [Unreleased] — Graph scale & performance
+
+`radar graph` không còn đơ trình duyệt với repo lớn (10k–50k+ hàm). Không viết lại renderer — vẫn SVG + D3 nhúng offline, 1 file HTML self-contained. Giải pháp: đổi quy mô **dữ liệu** thay vì bộ render.
+
+### Added
+
+- **`graph/graph_transform.py`** — 3 hàm thuần (không mutate, không persist): `aggregate_by_file` (gom hàm/route → 1 node/file, edge gộp + `weight`, drop self-loop), `focus_security` (subgraph reachable forward từ route = mặt phẳng tấn công), `cap_nodes` (giữ top-N theo degree, deterministic, báo số node bị bỏ).
+- **`radar graph` flags** — `--level file|function` (mặc định **file**), `--focus none|security`, `--max-nodes N` (mặc định 1500, `0` = không giới hạn). In cảnh báo khi cap kích hoạt hoặc focus security mà không có route.
+
+### Changed
+
+- **`graph/graph_viz.py`** — đóng băng simulation: pre-tick layout ngầm (`sim.tick()` ×300) rồi `drawPositions()` vẽ tĩnh 1 lần; bỏ `sim.on('tick')` (per-frame). Node file scale bán kính theo `members` (file lớn vẽ to + có nhãn). Drag không reheat sim.
+- **Default đổi** từ mức-hàm → mức-file cho `radar graph`. Chỉ ảnh hưởng đường render; `impact`/`report`/`triage` và cache `graph.json` giữ nguyên graph function-level đầy đủ.
+
+### Tests
+
+- +11 test (`test_graph_transform.py`, mở rộng `test_graph_viz.py`: frozen layout, file-radius). Verify browser thật (89 file-node render, không lỗi console). Toàn bộ **238 pass**.
+
 ## [0.2.1] — 2026-06-10
 
 Verify nửa CI trên GitHub thật (đóng [PRD §8](./security-radar-prd.md) DoD) + dọn nợ hygiene và sửa các finding tự-quét.
