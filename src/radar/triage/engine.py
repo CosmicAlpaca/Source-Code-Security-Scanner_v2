@@ -61,6 +61,13 @@ def triage(
     runtime = detect_runtime()
     report = run_semgrep(root, rules_only=rules_only, extra_config=list(extra_config or []), runtime=runtime)
     items = findings_mod.parse(report)
+    
+    from radar.scan.gitleaks_runner import run_gitleaks
+    items.extend(run_gitleaks(root))
+    
+    from radar.scan.findings import SEVERITY_ORDER
+    items.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 3), f.path, f.line))
+    
     if not only_all:
         items = [f for f in items if _passes_floor(f, floor)]
 

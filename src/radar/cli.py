@@ -504,6 +504,13 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
             console.print(f"[red]scan failed:[/] {exc}")
             raise SystemExit(2)
         items = findings_mod.parse(raw)
+        
+        from radar.scan.gitleaks_runner import run_gitleaks
+        items.extend(run_gitleaks(root))
+        
+        from radar.scan.findings import SEVERITY_ORDER
+        items.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 3), f.path, f.line))
+        
         items, suppressed = filter_findings(items, root)
 
     smry = findings_mod.summary(items)
@@ -603,6 +610,81 @@ def graph_cmd(path, graph_path, out_file) -> None:
         f"   {n} nodes · {e} edges — open in browser, zoom/pan/click to explore"
     )
 
+
+@main.command("analyze")
+@click.argument("url", type=str)
+@click.option("--branch", default=None, help="Branch to analyze")
+@click.option("--function", "function_name", default=None, help="Function name for impact trace")
+@click.option("--out", "out_file", default=None, help="Output HTML path")
+@click.pass_context
+def analyze(ctx, url: str, branch: str | None, function_name: str | None, out_file: str | None) -> None:
+    """End-to-end: Clone a GitHub repo, run scan, AI triage, and generate dashboard."""
+    import re
+    import subprocess
+    import os
+
+    _URL_RE = re.compile(r"^https://(www\.)?github\.com/[\w.-]+/[\w.-]+(\.git)?$")
+    if not _URL_RE.match(url):
+        console.print(f"[red]Invalid GitHub URL:[/] {url}")
+        sys.exit(1)
+
+    repo_name = url.rstrip("/").rsplit("/", 1)[-1]
+    if repo_name.endswith(".git"):
+        repo_name = repo_name[:-4]
+
+    repo_dir = Path("analysis_repos") / repo_name
+    repo_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    console.print(f"\n[bold blue]1.[/] Synchronizing repository [cyan]{url}[/]...")
+    if repo_dir.exists():
+        console.print(f"   [dim]Updating existing clone at {repo_dir}...[/]")
+        subprocess.run(["git", "fetch", "--all"], cwd=repo_dir, check=False)
+        if branch:
+            subprocess.run(["git", "checkout", branch], cwd=repo_dir, check=False)
+        else:
+            subprocess.run(["git", "pull"], cwd=repo_dir, check=False)
+    else:
+        console.print(f"   [dim]Cloning to {repo_dir}...[/]")
+        subprocess.run(["git", "clone", url, str(repo_dir)], check=True)
+        if branch:
+            subprocess.run(["git", "checkout", branch], cwd=repo_dir, check=False)
+
+    diff_target = None
+    if not function_name and branch:
+        default_branch = "master"
+        try:
+            res = subprocess.run(
+                ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+                cwd=repo_dir, capture_output=True, text=True, check=True
+            )
+            default_branch = res.stdout.strip().rsplit("/", 1)[-1]
+        except Exception:
+            pass
+
+        try:
+            subprocess.run(["git", "fetch", "origin", default_branch], cwd=repo_dir, check=True, capture_output=True)
+            diff_target = f"origin/{default_branch}...HEAD"
+        except subprocess.CalledProcessError:
+            diff_target = "HEAD~1"
+
+    dest_html = out_file or str(Path("analysis_results") / f"{repo_name}_unified_dashboard.html")
+    Path(dest_html).parent.mkdir(parents=True, exist_ok=True)
+
+    do_triage = bool(os.environ.get("OPENAI_API_KEY"))
+
+    console.print("\n[bold blue]2.[/] Running full security pipeline (Scan + Gitleaks + Graph + Dashboard)...")
+    # Call report command directly within the same process
+    ctx.invoke(
+        report,
+        path=str(repo_dir),
+        rules_only=False,
+        function_name=function_name,
+        diff=diff_target,
+        do_triage=do_triage,
+        floor="warning",
+        force=False,
+        out_file=dest_html
+    )
 
 if __name__ == "__main__":
     main()
