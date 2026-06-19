@@ -48,6 +48,30 @@ def test_no_findings(tmp_path):
     assert "✅ No security findings." in out
 
 
+def test_reads_radar_format(tmp_path):
+    # `radar scan --format json` uses top-level `findings[]` (flat), not semgrep `results`.
+    radar = tmp_path / "radar.json"
+    radar.write_text(json.dumps({
+        "schema": 1,
+        "summary": {"error": 1, "warning": 1, "info": 0, "total": 2},
+        "findings": [
+            {"severity": "WARNING", "path": "app.py", "line": 9, "rule": "py-flask-debug-true", "message": "debug on"},
+            {"severity": "ERROR", "path": "db.js", "line": 3, "rule": "js-sql-string-concat", "message": "sqli"},
+        ],
+    }), encoding="utf-8")
+    out = render(str(radar))
+    assert "2 finding(s)" in out and "1 error" in out and "1 warning" in out
+    assert "`db.js:3`" in out and "js-sql-string-concat" in out
+    # ERROR sorts before WARNING regardless of input order
+    assert out.index("js-sql-string-concat") < out.index("py-flask-debug-true")
+
+
+def test_radar_empty_findings(tmp_path):
+    radar = tmp_path / "empty.json"
+    radar.write_text(json.dumps({"schema": 1, "findings": []}), encoding="utf-8")
+    assert "✅ No security findings." in render(str(radar))
+
+
 def test_caps_findings_at_30(tmp_path):
     results = [
         {

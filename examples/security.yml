@@ -1,0 +1,38 @@
+# security-radar — drop-in CI for any repo.
+#
+# Copy this single file to .github/workflows/security.yml in your repo (or fork).
+# No need to copy rules or scripts — everything lives in the action.
+#
+# What you get on each PR / push:
+#   - Semgrep scan (OWASP presets + radar's bundled rules) -> Security tab (SARIF)
+#   - Blast-radius (impact) for the PR diff
+#   - One auto-updating PR comment with findings + impact
+#
+# Requirements:
+#   - Repo must be public (or have GitHub Advanced Security) for the Security tab.
+#   - fetch-depth: 0 below is required for impact to diff against the base branch.
+
+name: Security
+on: [pull_request, push]
+
+permissions:
+  contents: read
+  security-events: write   # upload SARIF to the Security tab
+  pull-requests: write     # post the PR comment
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: CosmicAlpaca/Source-Code-Security-Scanner_v2@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional knobs (defaults shown):
+          # path: "."            # directory to scan
+          # fail-on: ""          # "error" | "warning" | "info" to block; empty = informational
+          # rules-only: "false"  # "true" = offline, only radar's bundled rules
+          # comment: "true"      # set "false" to skip the PR comment
+          # sarif: "true"        # set "false" to skip the Security-tab upload

@@ -190,27 +190,91 @@ radar triage . --format json            # mỗi finding kèm object risk:{value,
 
 ---
 
-## Phần 4 — Gắn vào CI (GitHub Actions)
+## Phần 3.6 — `radar graph`: bản đồ phụ thuộc tương tác
 
-Muốn tự động quét + comment theo PR (không bắt buộc — local đã đủ dùng):
+Xuất call graph thành **1 file HTML self-contained** (D3 nhúng sẵn — mở trực tiếp bằng browser, **chạy offline, không cần server**):
 
-1. **Copy 3 thứ** vào repo của bạn:
-   - `.github/workflows/security-scan.yml`
-   - `scripts/render-pr-comment.py` (cho job comment)
-   - `src/radar/rules/` (custom rules — hoặc xóa `--config src/radar/rules/` trong workflow nếu không cần)
+```bash
+radar graph .                      # mặc định: gom theo FILE — repo lớn vẫn mở mượt
+radar graph . --level function     # đồ thị HÀM đầy đủ (chi tiết, nặng hơn)
+radar graph . --focus security     # chỉ subgraph reachable từ route = mặt phẳng tấn công
+radar graph . --max-nodes 800      # giới hạn node (giữ node bậc cao nhất; 0 = không giới hạn)
+radar graph . --out graph.html     # chọn đường dẫn (mặc định <repo>/radar-graph.html)
+radar graph . --graph .radar/graph.json   # dùng graph có sẵn, bỏ qua build
+```
+
+- **Mặc định mức file** để repo lớn (chục nghìn hàm) không làm đơ tab: hàm được **gom theo file** (vài chục–vài trăm node), layout được **tính sẵn rồi vẽ tĩnh** (không animate mỗi frame). `--level function` cho đồ thị hàm đầy đủ khi cần xem chi tiết.
+- **`--focus security`** chỉ giữ phần đồ thị **đi tới được từ route** — đúng những gì input của attacker chạm tới. Repo không có route → cảnh báo và hiện full.
+- **`--max-nodes N`** (mặc định 1500) chặn trần an toàn: vượt thì giữ node bậc cao nhất và **in rõ số node bị bỏ** (không cắt âm thầm).
+- Mở rồi: **zoom / pan / kéo node / click** (highlight hàng xóm) / **search** / **legend** theo file.
+
+> Các cờ này chỉ là **bộ lọc lúc hiển thị**, áp trên một bản sao ngay trước khi vẽ — **không** ảnh hưởng `impact` / `report` / `triage` hay cache `graph.json` (chúng luôn dùng graph hàm đầy đủ).
+
+---
+
+## Phần 3.7 — `radar history` & `radar watch`
+
+```bash
+radar history                      # bảng lịch sử scan + trend (↑/↓ so với lần trước)
+radar history --path ../repo --limit 50
+radar history --format html > history.html
+radar watch .                      # live linter: scan file khi save, hiện NEW/FIXED tức thì
+radar watch . --ext .rb --ext .php # theo dõi thêm phần mở rộng
+```
+
+- **`history`** đọc lại log các lần `radar scan` trước → bảng số ERROR/WARN/Total theo thời gian + dòng trend. Chưa scan lần nào → nhắc chạy `radar scan` trước.
+- **`watch`** chạy nền, mỗi lần lưu file thì quét lại và chỉ in finding **mới xuất hiện / vừa được fix** — vòng lặp sửa lỗi nhanh ngay khi code.
+
+---
+
+## Phần 4 — Gắn vào CI (GitHub Action)
+
+Radar được đóng gói thành **GitHub Action** — bạn **không cần copy rules/script** vào repo, chỉ thêm **1 file workflow ~12 dòng**:
+
+1. Tạo `.github/workflows/security.yml` trong repo (hoặc fork) của bạn — copy từ [examples/security.yml](examples/security.yml):
+
+   ```yaml
+   name: Security
+   on: [pull_request, push]
+   permissions:
+     contents: read
+     security-events: write   # SARIF lên tab Security
+     pull-requests: write     # comment PR
+   jobs:
+     radar:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+           with: { fetch-depth: 0 }   # cần cho impact diff
+         - uses: CosmicAlpaca/Source-Code-Security-Scanner_v2@v1
+           with:
+             github-token: ${{ secrets.GITHUB_TOKEN }}
+   ```
+
 2. **Repo phải public** (hoặc có GHAS) để tab Security hiển thị SARIF. Chỉ cần `GITHUB_TOKEN` mặc định — **không cần tài khoản Semgrep**.
-3. Push lên main → workflow chạy. Xong.
+3. Push / mở PR → action chạy. Xong. Rules đi theo action (đóng gói trong package), không phải bê `src/radar/rules/`.
 
-Workflow có 4 jobs:
+Action làm trong **1 job**:
 
-| Job | Khi nào chạy | Làm gì |
+| Bước | Khi nào | Làm gì |
 |---|---|---|
-| `semgrep` | PR, push main, cron daily, manual | Scan → SARIF lên tab Security + artifact `semgrep-report` |
-| `rule-tests` | như trên | `semgrep --test src/radar/rules/` — kiểm custom rules |
-| `impact` | chỉ PR | `radar build` + `radar impact --diff base...HEAD` → artifact `impact-report` |
-| `pr-comment` | chỉ PR cùng repo (fork bị bỏ qua) | 1 comment gộp findings + blast radius, tự update không spam |
+| scan (SARIF) | mọi event | `radar scan --format sarif` → SARIF lên tab Security |
+| scan (JSON) | mọi event | findings cho comment + gate |
+| impact | chỉ PR | `radar impact --diff base...HEAD` → artifact `radar-report` |
+| PR comment | chỉ PR (fork khác bị bỏ qua) | 1 comment gộp findings + blast radius, tự update không spam |
+| gate | khi đặt `fail-on` | exit≠0 nếu finding ≥ ngưỡng (mặc định informational) |
 
-Findings **không block merge** — chỉ informational.
+**Inputs** (đều có default, xem `examples/security.yml`):
+
+| Input | Default | Ý nghĩa |
+|---|---|---|
+| `path` | `.` | thư mục quét |
+| `github-token` | — | token cho PR comment (`secrets.GITHUB_TOKEN`) |
+| `fail-on` | `''` | `error\|warning\|info` để chặn; rỗng = không block |
+| `rules-only` | `false` | offline, chỉ rules bundled |
+| `comment` / `sarif` | `true` | bật/tắt PR comment / upload SARIF |
+
+> ⚠️ `fetch-depth: 0` ở bước checkout là **bắt buộc** để impact diff được với nhánh base. Findings **không block merge** trừ khi bạn đặt `fail-on`.
 
 ---
 
@@ -256,10 +320,10 @@ Thêm ngôn ngữ mới = thêm **1 file plugin** trong `src/radar/graph/languag
 | Custom OWASP rules | YAML (Semgrep DSL) | 50 rules tự viết (JS·Py·Go·Java·PHP), đóng gói trong package |
 | AST parser | [tree-sitter](https://tree-sitter.github.io) + bindings JS/TS/Python/Go/Java | Parse codebase thành AST, tự viết extractor cho từng ngôn ngữ |
 | Call graph | [NetworkX](https://networkx.org) `DiGraph` | Lưu function calls + imports; reverse BFS để tính blast radius |
-| CLI | [Click](https://click.palletsprojects.com) | Subcommands `radar scan / impact / build` |
+| CLI | [Click](https://click.palletsprojects.com) | 8 lệnh: `scan / build / impact / report / triage / graph / history / watch` |
 | Terminal output | [Rich](https://rich.readthedocs.io) | Bảng màu, tree view |
 | HTML report | [Jinja2](https://jinja.palletsprojects.com) + Mermaid.js | Template `.j2`, diagram render phía client |
-| Testing | pytest + Semgrep `--test` | 103 unit tests; rule fixtures với `// ruleid:` / `ok:` |
+| Testing | pytest + Semgrep `--test` | 238 unit tests; rule fixtures với `// ruleid:` / `ok:` |
 
 > Phần **scan** dùng Semgrep làm engine, mình viết rules. Phần **call graph** tự build từ đầu bằng tree-sitter (parse AST) và NetworkX (lưu graph + BFS).
 
@@ -285,7 +349,7 @@ Gap còn lại (NoSQL injection, open redirect, ReDoS) nằm trong [roadmap](doc
 
 ```bash
 pip install -e ".[dev]"
-pytest                     # 103 tests
+pytest                     # 238 tests
 ```
 
 ## Tài liệu
