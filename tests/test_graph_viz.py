@@ -39,3 +39,21 @@ def test_falls_back_to_cdn_when_vendor_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(graph_viz, "_VENDOR_D3", tmp_path / "missing.js")
     html = to_dependency_html(_graph())
     assert f'<script src="{graph_viz._CDN_D3}"></script>' in html
+
+
+def test_layout_is_frozen_not_animated():
+    # The simulation must be pre-ticked headless then drawn once — no per-frame
+    # tick handler — otherwise large graphs lock the tab on open.
+    html = to_dependency_html(_graph())
+    assert "sim.on('tick'" not in html        # no live animation loop
+    assert "sim.tick(" in html                # positions computed headless
+    assert "function drawPositions(" in html  # rendered statically, once
+
+
+def test_file_nodes_scale_radius_by_members():
+    # File-level nodes carry `members`; bigger files should render larger.
+    g = nx.DiGraph()
+    g.add_node("big.js", name="big.js", file="big.js", kind="file", members=50)
+    g.add_node("small.js", name="small.js", file="small.js", kind="file", members=1)
+    html = to_dependency_html(g)
+    assert '"members": 50' in html
