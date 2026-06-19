@@ -38,6 +38,27 @@ Biến AI triage (trước đây là 1 cột thụ động, ẩn sau API key) th
 
 - +24 test (`test_risk.py`, `test_triage_ranking.py`, mở rộng dashboard/prompt). Toàn bộ **217 pass**.
 
+## [Unreleased] — Publish CI as a GitHub Action
+
+Radar CI giờ là **GitHub Action** (composite). Repo khác chỉ thêm **1 caller ~12 dòng** thay vì copy 3 file + sửa bug `pip install .`. Rules đi theo `pip install` nên không cần bê `src/radar/rules/`.
+
+### Added
+
+- **`action.yml`** (root, composite) — 1 job: cài radar từ `${{ github.action_path }}` (khớp version theo ref, chạy được cả khi dogfood `uses: ./`) + `semgrep`; `radar scan` ra SARIF (Security tab) **và** JSON (comment/gate); `radar impact` (PR); upsert PR comment; artifact `radar-report`; bước `gate` cuối đọc `summary` từ JSON (không quét lần 3). Inputs: `path`, `github-token`, `fail-on`, `rules-only`, `comment`, `sarif`.
+- **`examples/security.yml`** — caller mẫu copy-paste cho mọi repo/fork.
+
+### Changed
+
+- **`scripts/render-pr-comment.py`** — `load_findings` đọc **cả** semgrep gốc (`results`) lẫn radar `scan --format json` (`findings`), tách `_from_semgrep`/`_from_radar`.
+- **`.github/workflows/security-scan.yml`** — dogfood: gộp `semgrep`/`impact`/`pr-comment` thành 1 job dùng chính action (`uses: ./`); giữ job `rule-tests` (radar-specific).
+- **README Phần 4** — viết lại theo mô hình Action (bỏ "copy 3 file").
+
+### Tests
+
+- +2 test (`test_render_pr_comment.py`: radar findings format). Lint 3 YAML (action + dogfood + example). Toàn bộ **240 pass**.
+
+> **Release:** sau khi merge, gắn tag để caller `@v1` ổn định: `git tag v1 <sha> && git push origin v1` (re-tag khi action đổi).
+
 ## [Unreleased] — Graph scale & performance
 
 `radar graph` không còn đơ trình duyệt với repo lớn (10k–50k+ hàm). Không viết lại renderer — vẫn SVG + D3 nhúng offline, 1 file HTML self-contained. Giải pháp: đổi quy mô **dữ liệu** thay vì bộ render.

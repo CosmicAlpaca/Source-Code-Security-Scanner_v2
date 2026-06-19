@@ -29,21 +29,49 @@ def escape_cell(text: str) -> str:
     )
 
 
-def load_findings(report_path: str) -> list[dict]:
-    with open(report_path, encoding="utf-8") as fh:
-        report = json.load(fh)
-    findings = []
+def _norm_severity(value: str) -> str:
+    severity = str(value or "INFO").upper()
+    return severity if severity in SEVERITY_ORDER else "INFO"
+
+
+def _from_semgrep(report: dict) -> list[dict]:
+    """semgrep native JSON: top-level `results[]` with nested `extra`/`start`."""
+    out = []
     for result in report.get("results", []):
-        severity = result.get("extra", {}).get("severity", "INFO").upper()
-        findings.append(
+        extra = result.get("extra", {})
+        out.append(
             {
-                "severity": severity if severity in SEVERITY_ORDER else "INFO",
+                "severity": _norm_severity(extra.get("severity")),
                 "path": result.get("path", "?"),
                 "line": result.get("start", {}).get("line", 0),
                 "rule": result.get("check_id", "?"),
-                "message": result.get("extra", {}).get("message", "").strip(),
+                "message": (extra.get("message") or "").strip(),
             }
         )
+    return out
+
+
+def _from_radar(report: dict) -> list[dict]:
+    """radar `scan --format json`: top-level `findings[]`, already flat."""
+    out = []
+    for f in report.get("findings", []):
+        out.append(
+            {
+                "severity": _norm_severity(f.get("severity")),
+                "path": f.get("path", "?"),
+                "line": f.get("line", 0),
+                "rule": f.get("rule", "?"),
+                "message": (f.get("message") or "").strip(),
+            }
+        )
+    return out
+
+
+def load_findings(report_path: str) -> list[dict]:
+    with open(report_path, encoding="utf-8") as fh:
+        report = json.load(fh)
+    # semgrep native uses `results`; radar `scan --format json` uses `findings`.
+    findings = _from_semgrep(report) if report.get("results") is not None else _from_radar(report)
     findings.sort(key=lambda f: (SEVERITY_ORDER[f["severity"]], f["path"], f["line"]))
     return findings
 
