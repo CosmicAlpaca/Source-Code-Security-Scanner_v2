@@ -305,6 +305,23 @@ class TestApiTriage:
         assert status == 404
 
 
+# ── POST /api/impact ──────────────────────────────────────────────────────────
+
+class TestApiImpact:
+    def test_returns_202(self, server: _Server):
+        status, _, _ = server.post("/api/impact?mode=changes")
+        assert status == 202
+
+    def test_never_500_on_any_mode(self, server: _Server):
+        for mode in ("changes", "file", "findings", "function", "bogus"):
+            status, _, _ = server.post("/api/impact?mode=" + mode)
+            assert status != 500
+
+    def test_function_mode_with_arg(self, server: _Server):
+        status, _, _ = server.post("/api/impact?mode=function&function=foo")
+        assert status == 202
+
+
 # ── Rapid sequential requests (regression for thread-pool exhaustion) ─────────
 
 class TestConcurrency:

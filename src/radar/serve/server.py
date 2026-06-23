@@ -5,6 +5,7 @@ Routes (bound to 127.0.0.1 ONLY):
     GET  /events      → Server-Sent-Events stream (kept open, fed by Broadcaster)
     GET  /api/state   → JSON snapshot of current State
     POST /api/triage  → trigger on-demand AI triage (never 500s)
+    POST /api/impact  → switch Blast trace mode (changes/file/findings/function)
     GET  /static/*    → package assets (app.js/app.css) + vendored D3
 """
 
@@ -146,11 +147,23 @@ def make_handler(broadcaster: Broadcaster, orch: Orchestrator):
                 self._send(404, b"not found", "text/plain; charset=utf-8")
 
         def do_POST(self) -> None:  # noqa: N802
+            from urllib.parse import parse_qs, urlsplit
+
             path = self.path.split("?", 1)[0]
             if path == "/api/triage":
                 # Triage runs in a worker so the response returns immediately;
                 # results stream back over SSE. Never 500s on a missing key.
                 threading.Thread(target=orch.run_triage, daemon=True).start()
+                self._send(202, b'{"status":"started"}', "application/json; charset=utf-8")
+            elif path == "/api/impact":
+                # Switch the Blast tab's trace source (changes / file / findings /
+                # function). Cheap (cached graph + BFS) — runs in a worker, streams
+                # the blast panel back over SSE. Never 500s.
+                qs = parse_qs(urlsplit(self.path).query)
+                mode = (qs.get("mode") or ["changes"])[0]
+                fn = (qs.get("function") or [None])[0]
+                threading.Thread(target=orch.set_impact_mode, args=(mode, fn),
+                                 daemon=True).start()
                 self._send(202, b'{"status":"started"}', "application/json; charset=utf-8")
             else:
                 self._send(404, b"not found", "text/plain; charset=utf-8")

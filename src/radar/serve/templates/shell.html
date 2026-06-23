@@ -25,16 +25,26 @@
 </div>
 
 <div class="tabs">
-  <button class="tab-btn active" data-tab="overview" onclick="showTab('overview')">📊 Overview</button>
+  <button class="tab-btn" data-tab="overview" onclick="showTab('overview')">📊 Overview</button>
   <button class="tab-btn" data-tab="findings" onclick="showTab('findings')">🛡 Findings <span class="cnt" id="cnt-findings">0</span></button>
-  <button class="tab-btn" data-tab="blast" onclick="showTab('blast')">🔗 Blast Radius</button>
+  <button class="tab-btn active" data-tab="blast" onclick="showTab('blast')">🔗 Blast Radius</button>
   <button class="tab-btn" data-tab="history" onclick="showTab('history')">📈 History</button>
   <button class="tab-btn" data-tab="graph" onclick="showTab('graph')">🕸 Graph</button>
 </div>
 
-<div id="tab-overview" class="tab-content active"><div id="panel-overview"></div></div>
+<div id="tab-overview" class="tab-content"><div id="panel-overview"></div></div>
 <div id="tab-findings" class="tab-content"><div id="panel-findings"></div></div>
-<div id="tab-blast" class="tab-content"><div id="panel-blast"></div></div>
+<div id="tab-blast" class="tab-content active">
+  <div class="impact-toolbar">
+    <span class="impact-label">Trace impact of:</span>
+    <button class="imp-btn active" data-mode="changes" onclick="setImpact('changes')">Changes (vs HEAD)</button>
+    <button class="imp-btn" data-mode="file" onclick="setImpact('file')">This file</button>
+    <button class="imp-btn" data-mode="findings" onclick="setImpact('findings')">Findings</button>
+    <input id="impact-fn" class="search-box" placeholder="🔍 trace a function…"
+           onkeydown="if(event.key==='Enter'){setImpactFn(this.value);}">
+  </div>
+  <div id="panel-blast"></div>
+</div>
 <div id="tab-history" class="tab-content"><div id="panel-history"></div></div>
 <div id="tab-graph" class="tab-content">
   <div id="panel-graph">

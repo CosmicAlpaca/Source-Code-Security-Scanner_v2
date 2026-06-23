@@ -242,12 +242,26 @@ radar serve . --ext .rb --ext .php  # theo dõi thêm extension
 
 Dashboard gồm 5 tab: **Overview** (stat cards + OWASP/severity donut charts), **Findings**, **Blast Radius**, **History**, **Graph** (D3 force-directed).
 
-### Mô hình cập nhật 3 tốc độ
+### Impact-first: tab Blast Radius (mặc định)
+
+`radar serve` mở thẳng tab **Blast Radius** để tập trung câu hỏi *"thay đổi của tôi ảnh hưởng tới đâu"*. Chọn nguồn trace ở thanh **Trace impact of:**
+
+| Mode | Trace gì | Cập nhật |
+|---|---|---|
+| **Changes (vs HEAD)** *(mặc định)* | Mọi thay đổi uncommitted (`git diff HEAD`) → function/API/feature bị ảnh hưởng | mỗi lần save (nhanh — graph cache + BFS, **không** chạy semgrep) |
+| **This file** | File vừa save (kể cả file mới chưa commit) | mỗi lần save |
+| **Findings** | Blast radius của top findings (hành vi cũ) | debounce |
+| ô **trace a function…** | 1 hàm theo tên | khi nhấn Enter |
+
+Node trong blast radius mang lỗ hổng được **đánh dấu overlay** (dùng kết quả scan sẵn có, không re-scan) → trả lời *"thay đổi của tôi có chạm code dính lỗ hổng không"*.
+
+### Mô hình cập nhật
 
 | Loại dữ liệu | Khi nào cập nhật | Lý do |
 |---|---|---|
 | Findings + History | **Tức thì** sau mỗi lần save | Incremental scan 1 file, nhanh |
-| Graph + Blast Radius | **~2 giây** sau save (debounce) | Cần rebuild graph, dùng cache |
+| **Blast Radius** (mode Changes/This file) | **Tức thì** sau mỗi lần save | Graph cache + BFS trace, không chạy semgrep |
+| Graph (full) | **~2 giây** sau save (debounce) | Cần rebuild full graph, dùng cache |
 | AI Triage | **On-demand** (nút "Run AI triage") | Tốn tiền + cần `OPENAI_API_KEY`; không bao giờ tự chạy; cảnh báo nếu thiếu key |
 
 - **Không cần dependency mới** cho HTTP/SSE — dùng stdlib `http.server.ThreadingHTTPServer`. D3 + Chart.js vendored vào package (offline-capable).

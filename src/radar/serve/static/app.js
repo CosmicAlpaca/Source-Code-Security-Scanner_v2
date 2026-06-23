@@ -182,6 +182,18 @@
     var el = document.getElementById(id);
     if (el) el.innerHTML = html;
   }
+  // Like swap(), but also re-executes inline <script> tags — innerHTML alone
+  // does NOT run them, which would leave the blast fragment's embedded D3 blank.
+  function swapWithScripts(id, html) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+    el.querySelectorAll("script").forEach(function (old) {
+      var s = document.createElement("script");
+      if (old.src) s.src = old.src; else s.textContent = old.textContent;
+      old.parentNode.replaceChild(s, old);
+    });
+  }
   function updateFindingCount() {
     var n = document.querySelectorAll("#panel-findings .finding-row").length;
     var c = document.getElementById("cnt-findings");
@@ -193,11 +205,12 @@
     if (s.panels) {
       swap("panel-overview", s.panels.overview || "");
       swap("panel-findings", s.panels.findings || "");
-      swap("panel-blast", s.panels.blast || "");
+      swapWithScripts("panel-blast", s.panels.blast || "");
       swap("panel-history", s.panels.history || "");
     }
     if (s.charts) { drawOverviewCharts(s.charts); drawHistoryChart(s.charts); }
     if (s.graph) renderGraph(s.graph);
+    if (s.impact_mode) setImpactActive(s.impact_mode);
     updateFindingCount();
   }
 
@@ -212,7 +225,7 @@
       var d = JSON.parse(ev.data); swap("panel-overview", d.html); drawOverviewCharts(d.charts);
     });
     es.addEventListener("blast", function (ev) {
-      swap("panel-blast", JSON.parse(ev.data).html);
+      swapWithScripts("panel-blast", JSON.parse(ev.data).html);
     });
     es.addEventListener("history", function (ev) {
       var d = JSON.parse(ev.data); swap("panel-history", d.html); drawHistoryChart(d.charts);
@@ -224,6 +237,26 @@
     es.onerror = function () { setStatus("reconnecting…", "warn"); };
     es.onopen = function () { setStatus("idle", "ok"); };
   }
+
+  // ── impact mode (Blast tab) ───────────────────────────────────────────────
+  function setImpactActive(mode) {
+    document.querySelectorAll(".imp-btn").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-mode") === mode);
+    });
+  }
+  window.setImpact = function (mode) {
+    setImpactActive(mode);
+    setStatus("tracing impact (" + mode + ")…", "busy");
+    fetch("/api/impact?mode=" + encodeURIComponent(mode), { method: "POST" })
+      .catch(function () { setStatus("impact request failed", "err"); });
+  };
+  window.setImpactFn = function (name) {
+    name = (name || "").trim(); if (!name) return;
+    setImpactActive(null);
+    setStatus("tracing function " + name + "…", "busy");
+    fetch("/api/impact?mode=function&function=" + encodeURIComponent(name), { method: "POST" })
+      .catch(function () { setStatus("impact request failed", "err"); });
+  };
 
   // ── triage button ───────────────────────────────────────────────────────────
   window.runTriage = function () {
