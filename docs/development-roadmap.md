@@ -1,11 +1,11 @@
 # Development Roadmap — security-radar
 
 > Living document theo dõi tiến độ. Yêu cầu sản phẩm & milestone gốc xem [PRD §7](./security-radar-prd.md). Chi tiết bản phát hành xem [Changelog](./project-changelog.md).
-> Cập nhật: 2026-06-10
+> Cập nhật: 2026-06-23
 
 ## Trạng thái tổng quan
 
-M1→M7 done. **M8 (verify CI trên GitHub thật)** done — Definition of Done ([PRD §8](./security-radar-prd.md)) đã xác minh trên repo public: workflow xanh, PR comment bot, SARIF→Code scanning, blast radius engine đúng. Toàn bộ scope yêu cầu ban đầu hoàn tất.
+M1→M8 done. **M9 (radar serve — live localhost dashboard)** done — `radar serve` lệnh duy nhất mở tab browser live, findings cập nhật <1s qua SSE không reload, graph/impact debounce ~2s, triage on-demand. Post-review hardening: C1 state race (snapshot-under-lock), C2 XSS (innerHTML→textContent), W3 (build_risk_map → triage/risk.py). Full suite: 334 passed / 9 skipped / 0 failed. Toàn bộ scope yêu cầu ban đầu hoàn tất.
 
 ## Milestones
 
@@ -19,8 +19,9 @@ M1→M7 done. **M8 (verify CI trên GitHub thật)** done — Definition of Done
 | M6 — Đóng gói demo | Exporters + impact-in-CI + demo app + README | ✅ Done (local) |
 | M7 — Local scan tool | `radar scan` (native→docker) + bundled rules + impact zero-footprint | ✅ Done |
 | M8 — Verify CI GitHub | DoD §8 trên repo public: workflow xanh, PR comment, SARIF, blast radius | ✅ Done |
+| M9 — radar serve | Live localhost dashboard: SSE, fragments, orchestrator, 128 new tests, security hardening | ✅ Done |
 
-103 pytest + `semgrep --test` xanh trên máy; CI xanh 9/9 run trên GitHub.
+334 pytest xanh trên máy (128 test serve mới + test cũ); CI xanh 9/9 run trên GitHub.
 
 ## Đã verify (2026-06-10, repo public)
 
