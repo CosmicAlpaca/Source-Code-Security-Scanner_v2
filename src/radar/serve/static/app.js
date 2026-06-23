@@ -114,11 +114,14 @@
       .attr("stroke-dasharray", function (d) { return d.dashed ? "4,3" : null; })
       .attr("marker-end", function (d) { return "url(#garr-" + d.kind + ")"; });
 
+    function draw() {
+      link.attr("x1", function (d) { return d.source.x; }).attr("y1", function (d) { return d.source.y; })
+        .attr("x2", function (d) { return d.target.x; }).attr("y2", function (d) { return d.target.y; });
+      node.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
+    }
     var node = g.append("g").selectAll("g").data(NODES).enter().append("g")
       .call(d3.drag()
-        .on("start", function (e, d) { if (!e.active) sim.alphaTarget(.3).restart(); d.fx = d.x; d.fy = d.y; })
-        .on("drag", function (e, d) { d.fx = e.x; d.fy = e.y; })
-        .on("end", function (e, d) { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+        .on("drag", function (e, d) { d.x = e.x; d.y = e.y; draw(); }));
     node.append("circle").attr("r", function (d) { return d.r; }).attr("fill", function (d) { return d.color; })
       .attr("stroke", function (d) { return d.kind === "route" ? "#fff" : "#0f1923"; })
       .attr("stroke-width", function (d) { return d.kind === "route" ? 2 : 1.5; });
@@ -140,17 +143,28 @@
       tip.appendChild(file); tip.appendChild(document.createElement("br")); tip.appendChild(meta);
     }).on("mouseleave", function () { tip.style.display = "none"; });
 
-    sim.on("tick", function () {
-      link.attr("x1", function (d) { return d.source.x; }).attr("y1", function (d) { return d.source.y; })
-        .attr("x2", function (d) { return d.target.x; }).attr("y2", function (d) { return d.target.y; });
-      node.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
-    });
-    sim.on("end", function () {
-      var b = g.node().getBBox(); if (!b.width || !b.height) return;
-      var pad = 40, sc = Math.min((W - pad * 2) / b.width, (H - pad * 2) / b.height, 1.5);
-      var tx = W / 2 - sc * (b.x + b.width / 2), ty = H / 2 - sc * (b.y + b.height / 2);
-      svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(sc));
-    });
+    // Frozen layout: settle the simulation headless, then draw once. Avoids
+    // per-frame animation AND the hidden-tab race where sim.on('end') fired
+    // while the Graph panel was display:none (getBBox→0 → never fit).
+    sim.stop();
+    for (var _i = 0; _i < 300; _i++) sim.tick();
+    draw();
+
+    // Fit from node DATA coordinates (not getBBox) so it works even when the
+    // panel is hidden at render time. Re-callable when the tab becomes visible.
+    function fit() {
+      if (!NODES.length) return;
+      var WW = svg.node().getBoundingClientRect().width || W;
+      var xs = NODES.map(function (n) { return n.x; }), ys = NODES.map(function (n) { return n.y; });
+      var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+      var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+      var bw = (maxX - minX) || 1, bh = (maxY - minY) || 1, pad = 40;
+      var sc = Math.min((WW - pad * 2) / bw, (H - pad * 2) / bh, 1.5);
+      var tx = WW / 2 - sc * (minX + bw / 2), ty = H / 2 - sc * (minY + bh / 2);
+      svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(sc));
+    }
+    fit();
+    window._radarFitGraph = fit;
 
     var search = document.getElementById("graph-search");
     if (search) {
@@ -222,6 +236,13 @@
 
   // ── boot ─────────────────────────────────────────────────────────────────────
   function boot() {
+    // Re-fit the graph when its tab becomes visible — the panel may have been
+    // hidden (width 0) when the data arrived, so the canvas needs a fit then.
+    var gbtn = document.querySelector('[data-tab="graph"]');
+    if (gbtn) gbtn.addEventListener("click", function () {
+      setTimeout(function () { if (window._radarFitGraph) window._radarFitGraph(); }, 60);
+    });
+
     fetch("/api/state").then(function (r) { return r.json(); })
       .then(function (s) {
         var rp = document.getElementById("repo-path");
