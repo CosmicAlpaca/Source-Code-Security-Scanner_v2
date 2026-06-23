@@ -421,3 +421,65 @@ class TestPushStatus:
         assert "text" in payload
         assert "level" in payload
         assert "ts" in payload
+
+
+# ── compute_full_state path normalization (regression) ──────────────────────────
+
+class TestComputeFullStatePathNormalization:
+    """Regression: semgrep emits absolute, OS-native paths; the fast-path
+    on_change uses repo-relative forward-slash. If the heavy pass stores absolute
+    paths, the orchestrator's per-file replacement (f.path != rel) never matches,
+    so edits don't clear/update findings. compute_full_state must canonicalize
+    finding paths to repo-relative forward-slash so both paths agree.
+    """
+
+    def test_absolute_paths_normalized_to_relative_forward_slash(self, tmp_path: Path):
+        from radar.serve import pipeline
+
+        (tmp_path / "app.js").write_text("const x = 1;\n", encoding="utf-8")
+        abs_path = str(tmp_path / "app.js")  # absolute, OS-native separators
+        fake_raw = {"results": [{
+            "path": abs_path,
+            "check_id": "rules.js-weak-hash-algorithm",
+            "start": {"line": 2},
+            "extra": {"severity": "WARNING", "message": "weak hash"},
+        }]}
+
+        with patch("radar.scan.runner.run_semgrep", return_value=fake_raw), \
+             patch("radar.scan.runner.detect_runtime", return_value="native"), \
+             patch("radar.scan.gitleaks_runner.run_gitleaks", return_value=[]):
+            data = pipeline.compute_full_state(tmp_path)
+
+        paths = [f.path for f in data["findings"]]
+        assert paths, "expected the mocked finding to survive the pipeline"
+        for p in paths:
+            assert p == "app.js", f"path not normalized to repo-relative: {p!r}"
+            assert "\\" not in p and not Path(p).is_absolute()
+
+    def test_fast_path_removal_matches_heavy_path_after_edit(self, tmp_path: Path):
+        """End-to-end of the bug: heavy pass populates state, then a fast-path
+        on_change that finds nothing for that file must clear it."""
+        from radar.serve import pipeline
+
+        (tmp_path / "app.js").write_text("const x = 1;\n", encoding="utf-8")
+        fake_raw = {"results": [{
+            "path": str(tmp_path / "app.js"),
+            "check_id": "rules.js-weak-hash-algorithm",
+            "start": {"line": 2},
+            "extra": {"severity": "WARNING", "message": "weak hash"},
+        }]}
+        with patch("radar.scan.runner.run_semgrep", return_value=fake_raw), \
+             patch("radar.scan.runner.detect_runtime", return_value="native"), \
+             patch("radar.scan.gitleaks_runner.run_gitleaks", return_value=[]):
+            data = pipeline.compute_full_state(tmp_path)
+
+        orch, bc, stream = _make_orch(tmp_path)
+        with orch._lock:
+            orch.state.findings = data["findings"]
+        assert len(orch.state.findings) == 1
+
+        # User fixes the file → scan_file now returns nothing for it.
+        with patch("radar.serve.orchestrator.scan_file", return_value=[]):
+            orch.on_change(tmp_path / "app.js")
+
+        assert orch.state.findings == [], "fast path failed to clear fixed file"

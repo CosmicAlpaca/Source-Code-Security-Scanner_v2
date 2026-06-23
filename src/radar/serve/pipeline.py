@@ -78,6 +78,22 @@ def compute_full_state(root: Path, *, rules_only: bool = False) -> dict:
     # ── 4. History trend ─────────────────────────────────────────────────────
     history = load_history(path_filter=str(root), limit=20)
 
+    # ── 5. Normalize finding paths to repo-relative forward-slash ─────────────
+    # Semgrep emits absolute, OS-native paths; the fast-path on_change uses
+    # repo-relative forward-slash. Canonicalize here (in place, preserving object
+    # identity so the id()-keyed risk_map stays valid) so the orchestrator's
+    # per-file replacement matches and edits clear/update correctly. Done AFTER
+    # graph/impact/risk so their original-path mapping is untouched.
+    import os as _os
+    root_abs = root.resolve()
+    for f in items:
+        try:
+            p = Path(f.path)
+            f.path = (str(p.relative_to(root_abs)) if p.is_absolute()
+                      else f.path).replace(_os.sep, "/")
+        except (ValueError, OSError):
+            f.path = f.path.replace(_os.sep, "/")
+
     return {
         "findings": items,
         "suppressed": len(suppressed),
