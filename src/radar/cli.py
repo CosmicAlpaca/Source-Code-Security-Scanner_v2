@@ -70,31 +70,10 @@ def _overlay_findings(root: Path, graph, result, *, rules_only: bool) -> None:
 
 
 def _build_risk_map(root: Path, graph, items, verdict_map: dict | None) -> dict:
-    """{(path,line,rule): RiskScore} for every finding. No API key required.
+    """Deprecated alias — risk-map construction now lives in radar.triage.risk."""
+    from radar.triage.risk import build_risk_map
 
-    Reach comes from the AI-triage result when present, else from per-finding
-    reachability on the (already-built) call graph; falls back to 'unknown' when
-    the graph is unavailable so a score is always produced.
-    """
-    from radar.triage.reachability import Reach, reachability
-    from radar.triage.risk import risk_score
-
-    # Key by object identity, not (path,line,rule): Semgrep can emit several
-    # findings at the same location/rule and they must not collapse into one score.
-    risk_map: dict = {}
-    for f in items:
-        vkey = (f.path, f.line, f.rule)
-        verdict = None
-        if verdict_map and vkey in verdict_map:
-            entry = verdict_map[vkey]
-            reach = Reach(None, entry.get("routes") or [], entry.get("reach") or "unknown")
-            verdict = entry.get("verdict")
-        elif graph is not None:
-            reach = reachability(graph, f, root)
-        else:
-            reach = Reach(None, [], "unknown")
-        risk_map[id(f)] = risk_score(f, reach, verdict)
-    return risk_map
+    return build_risk_map(root, graph, items, verdict_map)
 
 
 @main.command()
@@ -438,6 +417,33 @@ def watch(path, extra_exts) -> None:
 
     exts = WATCHED_EXTENSIONS | {e if e.startswith(".") else f".{e}" for e in extra_exts}
     run_watch(root, rules_dir=RULES_DIR, use_docker=use_docker, extensions=exts)
+
+
+@main.command()
+@click.argument("path", type=click.Path(exists=True, file_okay=False), default=".")
+@click.option("--port", type=int, default=None, help="Port to bind (default: auto-pick a free one)")
+@click.option("--open", "open_browser", is_flag=True, help="Open the dashboard in your browser")
+@click.option("--rules-only", is_flag=True, help="Offline scan — only bundled custom rules")
+@click.option("--ext", "extra_exts", multiple=True,
+              help="Extra file extensions to watch (e.g. --ext .rb --ext .php)")
+def serve(path, port, open_browser, rules_only, extra_exts) -> None:
+    """Live localhost dashboard — auto-updates as you edit.
+
+    Findings instant, graph/impact debounced, AI triage on-demand.
+    """
+    import shutil
+
+    from radar.scan.watcher import WATCHED_EXTENSIONS
+    from radar.serve import serve as serve_dashboard
+
+    root = Path(path).resolve()
+    use_docker = not shutil.which("semgrep") and shutil.which("docker")
+    exts = WATCHED_EXTENSIONS | {e if e.startswith(".") else f".{e}" for e in extra_exts}
+
+    serve_dashboard(
+        root, port=port, open_browser=open_browser, extensions=exts,
+        rules_only=rules_only, use_docker=use_docker,
+    )
 
 
 @main.command()

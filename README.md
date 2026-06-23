@@ -227,6 +227,35 @@ radar watch . --ext .rb --ext .php # theo dõi thêm phần mở rộng
 
 ---
 
+## Phần 3.8 — `radar serve`: live dashboard trên localhost
+
+Không muốn chạy lại lệnh mỗi lần sửa code? `radar serve` mở **1 tab trình duyệt tự cập nhật** — lưu file thì dashboard cập nhật ngay, không reload trang, không sinh file HTML mới.
+
+```bash
+pip install ".[watch]"        # cần watchdog để live-update; không có → static mode
+radar serve .                 # mở dashboard tại 127.0.0.1:7070
+radar serve . --port 8080     # đổi port
+radar serve . --open          # tự mở tab trình duyệt
+radar serve . --rules-only    # offline: chỉ custom rules (không cần mạng)
+radar serve . --ext .rb --ext .php  # theo dõi thêm extension
+```
+
+Dashboard gồm 5 tab: **Overview** (stat cards + OWASP/severity donut charts), **Findings**, **Blast Radius**, **History**, **Graph** (D3 force-directed).
+
+### Mô hình cập nhật 3 tốc độ
+
+| Loại dữ liệu | Khi nào cập nhật | Lý do |
+|---|---|---|
+| Findings + History | **Tức thì** sau mỗi lần save | Incremental scan 1 file, nhanh |
+| Graph + Blast Radius | **~2 giây** sau save (debounce) | Cần rebuild graph, dùng cache |
+| AI Triage | **On-demand** (nút "Run AI triage") | Tốn tiền + cần `OPENAI_API_KEY`; không bao giờ tự chạy; cảnh báo nếu thiếu key |
+
+- **Không cần dependency mới** cho HTTP/SSE — dùng stdlib `http.server.ThreadingHTTPServer`. D3 + Chart.js vendored vào package (offline-capable).
+- **Localhost-only**: server chỉ bind `127.0.0.1`, không expose ra mạng.
+- **Thiếu `[watch]` extra?** → static mode: scan 1 lần, hiển thị dashboard tĩnh (không live-update).
+
+---
+
 ## Phần 4 — Gắn vào CI (GitHub Action)
 
 Radar được đóng gói thành **GitHub Action** — bạn **không cần copy rules/script** vào repo, chỉ thêm **1 file workflow ~12 dòng**:
@@ -320,10 +349,10 @@ Thêm ngôn ngữ mới = thêm **1 file plugin** trong `src/radar/graph/languag
 | Custom OWASP rules | YAML (Semgrep DSL) | 50 rules tự viết (JS·Py·Go·Java·PHP), đóng gói trong package |
 | AST parser | [tree-sitter](https://tree-sitter.github.io) + bindings JS/TS/Python/Go/Java | Parse codebase thành AST, tự viết extractor cho từng ngôn ngữ |
 | Call graph | [NetworkX](https://networkx.org) `DiGraph` | Lưu function calls + imports; reverse BFS để tính blast radius |
-| CLI | [Click](https://click.palletsprojects.com) | 8 lệnh: `scan / build / impact / report / triage / graph / history / watch` |
+| CLI | [Click](https://click.palletsprojects.com) | 10 lệnh: `scan / build / impact / report / triage / graph / history / watch / analyze / serve` |
 | Terminal output | [Rich](https://rich.readthedocs.io) | Bảng màu, tree view |
 | HTML report | [Jinja2](https://jinja.palletsprojects.com) + Mermaid.js | Template `.j2`, diagram render phía client |
-| Testing | pytest + Semgrep `--test` | 238 unit tests; rule fixtures với `// ruleid:` / `ok:` |
+| Testing | pytest + Semgrep `--test` | 334 unit tests (9 skipped); rule fixtures với `// ruleid:` / `ok:` |
 
 > Phần **scan** dùng Semgrep làm engine, mình viết rules. Phần **call graph** tự build từ đầu bằng tree-sitter (parse AST) và NetworkX (lưu graph + BFS).
 
@@ -349,7 +378,7 @@ Gap còn lại (NoSQL injection, open redirect, ReDoS) nằm trong [roadmap](doc
 
 ```bash
 pip install -e ".[dev]"
-pytest                     # 238 tests
+pytest                     # 334 tests (9 skipped)
 ```
 
 ## Tài liệu

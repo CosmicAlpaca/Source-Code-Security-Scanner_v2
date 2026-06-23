@@ -1,7 +1,7 @@
 # System Architecture — security-radar
 
 > Kiến trúc kỹ thuật của bản hiện thực. Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md).
-> Cập nhật: 2026-06-08
+> Cập nhật: 2026-06-23
 
 ## 1. Hai subsystem
 
@@ -106,6 +106,34 @@ Thêm ngôn ngữ = thả 1 module vào `graph/languages/` (0 dòng sửa core):
 - Hiện thực `resolve_module(source, from_file, known_files) -> relpath | None` (resolver gọi để biến import specifier thành file đích).
 - Gọi `register(<instance>)` ở import-time.
 - `__init__.py` auto-import mọi module qua `pkgutil.iter_modules`, nên core không bao giờ tham chiếu một ngôn ngữ cụ thể.
+
+## 5d. Data flow — `radar serve`
+
+`radar serve [PATH] --port N [--open] [--rules-only] [--ext .EXT]`:
+
+1. **Khởi động** `ThreadingHTTPServer` bind `127.0.0.1:PORT` (stdlib, không cần dep ngoài). Build graph + scan ban đầu để có snapshot đầy đủ.
+2. **Watcher** (watchdog nếu có extra `[watch]`, else static mode) gọi `watch_loop` (từ `watcher.py`) — phát hiện file save.
+3. **Tiered update pipeline** (mỗi save event):
+   - *Instant*: `scan_file` incremental → patch findings + history fragment → SSE đẩy xuống browser.
+   - *Debounced ~2s*: orchestrator đợi debounce rồi rebuild graph fragment + blast-radius → SSE patch.
+   - *On-demand*: AI triage chỉ chạy khi client gửi request "Run AI triage" — không tự trigger.
+4. **SSE endpoint** (`/events`) — browser giữ kết nối; server push JSON event `{type, html}` → client gọi `innerHTML` patch đúng panel (không reload trang, không sinh file HTML).
+5. **Static assets** (`/static`) — D3, Chart.js vendored vào package (offline-capable).
+
+```
+radar serve
+  ├── server.py          ThreadingHTTPServer 127.0.0.1 + SSE /events
+  ├── orchestrator.py    điều phối tiered updates (instant / debounce / on-demand)
+  ├── pipeline.py        incremental scan + graph refresh + risk map
+  ├── templates/
+  │   └── shell.html     khung dashboard (5 tabs: Overview/Findings/Blast Radius/History/Graph)
+  └── static/
+      ├── app.js         SSE client + DOM patch logic
+      ├── app.css        styles
+      └── chart.js       vendored Chart.js (offline)
+```
+
+**Ranh giới bảo mật serve**: bind localhost-only; tooltip graph escape untrusted content (XSS hardening); AI triage opt-in (không bao giờ tự trigger tốn tiền).
 
 ## 7. Ranh giới bảo mật
 

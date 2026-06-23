@@ -521,55 +521,46 @@ def _dashboard_rows(findings: list[Finding], verdict_map: dict | None) -> str:
     return rows
 
 
-def render_dashboard(
-    repo_path: str,
-    findings: list[Finding],
-    suppressed: int,
-    mermaid_src: str = "",
-    traced_fn: str | None = None,
-    history: list | None = None,
-    verdict_map: dict | None = None,
-    risk_map: dict | None = None,
-    trace_res=None,
-) -> str:
-    """One-file HTML dashboard with tabbed UI: Overview · Findings · Blast Radius · History."""
-    history = history or []
-    s = summary(findings)
-    triage = verdict_map is not None
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-    mode = "AI-triaged" if triage else "offline scan"
-    repo_short = _esc(repo_path.split("/")[-1] or repo_path.split("\\")[-1] or "Dashboard")
+# ── OWASP breakdown helper (shared by overview fragment + chart scripts) ──────
+_DONUT_COLORS = [
+    "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6",
+    "#8b5cf6", "#ec4899", "#14b8a6", "#f59e0b", "#6366f1",
+]
 
-    # ── Findings table ────────────────────────────────────────────────────────
-    if risk_map is not None:
-        table = _ranked_findings_html(findings, risk_map, verdict_map)
-    else:
-        extra_head = "<th>Reachability</th><th>AI verdict</th>" if triage else ""
-        table = (
-            "<table><thead><tr>"
-            '<th style="width:90px">Severity</th><th style="width:60px">Line</th>'
-            '<th style="width:180px">Rule</th><th style="width:140px">OWASP</th><th>Message</th>'
-            + extra_head
-            + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"
-        )
 
-    # ── TAB 1: Overview — premium stat cards + OWASP donut chart ─────────────
-    total = s["error"] + s["warning"] + s["info"]
-    risk_band = "CRITICAL" if s["error"] >= 5 else ("HIGH" if s["error"] >= 1 else ("MEDIUM" if s["warning"] >= 3 else "LOW"))
-    band_color = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#22c55e"}.get(risk_band, "#94a3b8")
-    band_accent = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#22c55e"}.get(risk_band, "#3b82f6")
-
-    # OWASP category breakdown for donut chart
+def _owasp_breakdown(findings: list[Finding]) -> tuple[list[str], list[int]]:
+    """OWASP category labels + counts for the donut chart (pure)."""
     from collections import Counter
     owasp_counts: Counter = Counter()
     for f in findings:
         tag, _ = _owasp_tag(f.rule.rsplit(".", 1)[-1])
         owasp_counts[tag] += 1
-    owasp_labels = list(owasp_counts.keys())
-    owasp_vals = list(owasp_counts.values())
-    donut_colors = ["#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f59e0b","#6366f1"]
+    return list(owasp_counts.keys()), list(owasp_counts.values())
 
-    ov_html = (
+
+def _findings_table(findings: list[Finding], risk_map: dict | None, verdict_map: dict | None) -> str:
+    """Findings table HTML — ranked when risk_map given, else plain by-file rows."""
+    if risk_map is not None:
+        return _ranked_findings_html(findings, risk_map, verdict_map)
+    extra_head = "<th>Reachability</th><th>AI verdict</th>" if verdict_map is not None else ""
+    return (
+        "<table><thead><tr>"
+        '<th style="width:90px">Severity</th><th style="width:60px">Line</th>'
+        '<th style="width:180px">Rule</th><th style="width:140px">OWASP</th><th>Message</th>'
+        + extra_head
+        + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"
+    )
+
+
+def render_overview_fragment(findings: list[Finding], suppressed: int) -> str:
+    """Overview panel: stat cards + OWASP/severity donut canvases (pure)."""
+    s = summary(findings)
+    risk_band = "CRITICAL" if s["error"] >= 5 else ("HIGH" if s["error"] >= 1 else ("MEDIUM" if s["warning"] >= 3 else "LOW"))
+    band_color = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#22c55e"}.get(risk_band, "#94a3b8")
+    band_accent = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#22c55e"}.get(risk_band, "#3b82f6")
+    owasp_labels, _ = _owasp_breakdown(findings)
+
+    return (
         f'<div class="stat-row">'
         f'<div class="stat-card" style="--accent:{band_accent};border-top:3px solid {band_accent}">'
         f'<div class="num" style="color:{band_color}">{risk_band}</div>'
@@ -594,13 +585,12 @@ def render_dashboard(
             if owasp_labels else ''
         )
         + ('</div>' if owasp_labels else '')
-        + f'<div style="margin-top:12px;color:#475569;font-size:12px;padding:4px 0">'
-          f'Scanned: <b style="color:#94a3b8">{_esc(repo_path)}</b> &nbsp;·&nbsp; {mode} &nbsp;·&nbsp; {ts}'
-          + (' &nbsp;·&nbsp; <span style="color:#a78bfa">✦ AI triage enabled</span>' if triage else '')
-          + '</div>'
     )
 
-    # ── TAB 2: Findings — with search + filter toolbar ────────────────────────
+
+def render_findings_fragment(findings: list[Finding], risk_map: dict | None = None, verdict_map: dict | None = None) -> str:
+    """Findings panel: search/filter toolbar + table (ranked or plain). Pure."""
+    s = summary(findings)
     toolbar = (
         '<div class="toolbar">'
         '<input class="search-box" id="fSearch" type="text" placeholder="🔍 Search findings…" oninput="searchFindings()">'
@@ -610,18 +600,21 @@ def render_dashboard(
         f'<button class="fbtn" data-sev="INFO" onclick="filterSev(\'INFO\',this)" style="color:#93c5fd">INFO ({s["info"]})</button>'
         '</div>'
     )
-    findings_tab = (
+    return (
         '<div class="panel">'
         '<div class="panel-header"><span class="panel-title">🛡 Security Findings</span>' + toolbar + '</div>'
-        + table + '</div>'
+        + _findings_table(findings, risk_map, verdict_map) + '</div>'
     )
 
-    # ── TAB 3: Blast Radius — D3 interactive graph from graph_viz.py ─────────
+
+def render_blast_fragment(trace_res=None, mermaid_src: str = "", traced_fn: str | None = None, repo_path: str = "") -> str:
+    """Blast-radius panel: trace stats + interactive D3 graph (or mermaid/empty). Pure."""
     fn_note = (f' <span style="font-size:11px;color:#64748b">{_esc(traced_fn)}</span>') if traced_fn else ""
 
     # Build stats panel from trace_res
     trace_info = ""
     d3_graph_html = ""
+    sub = None
     if trace_res is not None:
         st = trace_res.stats
         trace_info = (
@@ -777,7 +770,12 @@ def render_dashboard(
       tip.style.display='block';
       tip.style.left=(e.offsetX+14)+'px';
       tip.style.top=(e.offsetY-10)+'px';
-      tip.innerHTML='<b style="color:#4a9eda">'+d.full+'</b><br><span style="color:#7f9db0">File: '+d.file+'</span><br><span style="color:#7f9db0">Kind: '+d.kind+' | Line: '+d.line+'</span>';
+      tip.textContent='';
+      var nm=document.createElement('b');nm.style.color='#4a9eda';nm.textContent=d.full;
+      var fl=document.createElement('span');fl.style.color='#7f9db0';fl.textContent='File: '+d.file;
+      var mt=document.createElement('span');mt.style.color='#7f9db0';mt.textContent='Kind: '+d.kind+' | Line: '+d.line;
+      tip.appendChild(nm);tip.appendChild(document.createElement('br'));
+      tip.appendChild(fl);tip.appendChild(document.createElement('br'));tip.appendChild(mt);
     }}).on('mouseleave',function(){{tip.style.display='none';}});
     sim.on('tick',function(){{
       link.attr('x1',function(d){{return d.source.x;}}).attr('y1',function(d){{return d.source.y;}})
@@ -814,7 +812,7 @@ def render_dashboard(
         blast_graph_section = ""
 
     if mermaid_src or d3_graph_html:
-        blast_tab = (
+        return (
             '<div class="panel"><div class="panel-header">'
             f'<span class="panel-title">🔗 Blast Radius — Impact Graph{fn_note}</span>'
             '<span style="font-size:11px;color:#64748b">Functions and routes affected by the change</span></div>'
@@ -822,84 +820,121 @@ def render_dashboard(
             + blast_graph_section
             + '</div>'
         )
-    else:
-        blast_tab = (
-            '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;gap:16px;color:#475569">'
-            '<div style="font-size:3rem">🔗</div>'
-            '<div style="font-weight:700;font-size:16px;color:#64748b">No Blast Radius Data</div>'
-            '<div style="font-size:13px;text-align:center">Specify <code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">--function</code> or '
-            '<code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">--diff</code> when running the analysis.</div>'
-            '</div>'
-        )
+    return (
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;gap:16px;color:#475569">'
+        '<div style="font-size:3rem">🔗</div>'
+        '<div style="font-weight:700;font-size:16px;color:#64748b">No Blast Radius Data</div>'
+        '<div style="font-size:13px;text-align:center">Specify <code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">--function</code> or '
+        '<code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">--diff</code> when running the analysis.</div>'
+        '</div>'
+    )
 
-    # ── TAB 4: History — Chart.js line chart ─────────────────────────────────
-    chart_script = ""
+
+def render_history_fragment(history: list | None = None) -> str:
+    """History panel: scan-trend line chart canvas (or empty state). Pure."""
+    history = history or []
     if history:
-        hist_tab = (
+        return (
             '<div class="panel"><div class="panel-header"><span class="panel-title">📈 Scan History Trend</span>'
             f'<span style="font-size:11px;color:#64748b">{len(history)} scan(s) recorded</span></div>'
             '<div style="padding:24px"><canvas id="hChart" height="90"></canvas></div></div>'
         )
-        chart_script = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script><script>'
-        chart_script += (
-            "var _cjsDefaults={color:'#94a3b8',borderColor:'rgba(255,255,255,.05)'};"
-            "Chart.defaults.color=_cjsDefaults.color;"
-            "new Chart(document.getElementById('hChart'),{type:'line',data:{labels:"
-            + json.dumps([e["ts"] for e in history])
-            + ",datasets:[{label:'ERROR',data:" + json.dumps([e["error"] for e in history])
-            + ",borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointBackgroundColor:'#ef4444'},"
-            + "{label:'WARNING',data:" + json.dumps([e["warning"] for e in history])
-            + ",borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',tension:.4,fill:true,pointBackgroundColor:'#f97316'}]},"
-            + "options:{responsive:true,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'top',"
-            + "labels:{color:'#94a3b8',usePointStyle:true}}},"
-            + "scales:{x:{ticks:{color:'#64748b'},grid:{color:'rgba(255,255,255,.04)'}},"
-            + "y:{beginAtZero:true,ticks:{color:'#64748b',stepSize:1},grid:{color:'rgba(255,255,255,.04)'}}}}});"
-        )
-        if owasp_labels:
-            chart_script += (
-                "new Chart(document.getElementById('owaspChart'),{type:'doughnut',data:{labels:"
-                + json.dumps(owasp_labels)
-                + ",datasets:[{data:" + json.dumps(owasp_vals)
-                + ",backgroundColor:" + json.dumps(donut_colors[:len(owasp_labels)])
-                + ",borderWidth:0,hoverOffset:6}]},"
-                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}},"
-                + "tooltip:{callbacks:{label:function(c){return c.label+': '+c.raw+' finding'+(c.raw!==1?'s':'');}}}},"
-                + "cutout:'68%'}});"
-                + "new Chart(document.getElementById('sevChart'),{type:'doughnut',data:{labels:['ERROR','WARNING','INFO'],"
-                + "datasets:[{data:" + json.dumps([s["error"], s["warning"], s["info"]])
-                + ",backgroundColor:['#ef4444','#f97316','#3b82f6'],borderWidth:0,hoverOffset:6}]},"
-                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}}},"
-                + "cutout:'68%'}});"
-            )
-        chart_script += "</script>"
-    else:
-        hist_tab = (
-            '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;gap:16px;color:#475569">'
-            '<div style="font-size:3rem">📈</div>'
-            '<div style="font-weight:700;font-size:16px;color:#64748b">No History Yet</div>'
-            '<div style="font-size:13px">Run <code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">radar report</code> again after future scans to see trends.</div>'
-            '</div>'
-        )
-        # Still build donut charts on overview even without history
-        if owasp_labels:
-            chart_script = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script><script>'
-            chart_script += (
-                "new Chart(document.getElementById('owaspChart'),{type:'doughnut',data:{labels:"
-                + json.dumps(owasp_labels)
-                + ",datasets:[{data:" + json.dumps(owasp_vals)
-                + ",backgroundColor:" + json.dumps(donut_colors[:len(owasp_labels)])
-                + ",borderWidth:0,hoverOffset:6}]},"
-                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}},"
-                + "tooltip:{callbacks:{label:function(c){return c.label+': '+c.raw+' finding'+(c.raw!==1?'s':'');}}}},"
-                + "cutout:'68%'}});"
-                + "new Chart(document.getElementById('sevChart'),{type:'doughnut',data:{labels:['ERROR','WARNING','INFO'],"
-                + "datasets:[{data:" + json.dumps([s["error"], s["warning"], s["info"]])
-                + ",backgroundColor:['#ef4444','#f97316','#3b82f6'],borderWidth:0,hoverOffset:6}]},"
-                + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}}},"
-                + "cutout:'68%'}});"
-                + "</script>"
-            )
+    return (
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px;gap:16px;color:#475569">'
+        '<div style="font-size:3rem">📈</div>'
+        '<div style="font-weight:700;font-size:16px;color:#64748b">No History Yet</div>'
+        '<div style="font-size:13px">Run <code style="color:#60a5fa;background:rgba(59,130,246,.1);padding:2px 6px;border-radius:4px">radar report</code> again after future scans to see trends.</div>'
+        '</div>'
+    )
 
+
+def _owasp_donut_script(owasp_labels: list[str], owasp_vals: list[int], s: dict) -> str:
+    """JS that draws the OWASP + severity donut charts (shared by both branches)."""
+    return (
+        "new Chart(document.getElementById('owaspChart'),{type:'doughnut',data:{labels:"
+        + json.dumps(owasp_labels)
+        + ",datasets:[{data:" + json.dumps(owasp_vals)
+        + ",backgroundColor:" + json.dumps(_DONUT_COLORS[:len(owasp_labels)])
+        + ",borderWidth:0,hoverOffset:6}]},"
+        + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}},"
+        + "tooltip:{callbacks:{label:function(c){return c.label+': '+c.raw+' finding'+(c.raw!==1?'s':'');}}}},"
+        + "cutout:'68%'}});"
+        + "new Chart(document.getElementById('sevChart'),{type:'doughnut',data:{labels:['ERROR','WARNING','INFO'],"
+        + "datasets:[{data:" + json.dumps([s["error"], s["warning"], s["info"]])
+        + ",backgroundColor:['#ef4444','#f97316','#3b82f6'],borderWidth:0,hoverOffset:6}]},"
+        + "options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},usePointStyle:true,padding:12}}},"
+        + "cutout:'68%'}});"
+    )
+
+
+def _dashboard_chart_script(history: list, owasp_labels: list[str], owasp_vals: list[int], s: dict) -> str:
+    """Chart.js <script> block for the history line chart + overview donuts."""
+    if not history:
+        if not owasp_labels:
+            return ""
+        return (
+            '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script><script>'
+            + _owasp_donut_script(owasp_labels, owasp_vals, s)
+            + "</script>"
+        )
+    script = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script><script>'
+    script += (
+        "var _cjsDefaults={color:'#94a3b8',borderColor:'rgba(255,255,255,.05)'};"
+        "Chart.defaults.color=_cjsDefaults.color;"
+        "new Chart(document.getElementById('hChart'),{type:'line',data:{labels:"
+        + json.dumps([e["ts"] for e in history])
+        + ",datasets:[{label:'ERROR',data:" + json.dumps([e["error"] for e in history])
+        + ",borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointBackgroundColor:'#ef4444'},"
+        + "{label:'WARNING',data:" + json.dumps([e["warning"] for e in history])
+        + ",borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',tension:.4,fill:true,pointBackgroundColor:'#f97316'}]},"
+        + "options:{responsive:true,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'top',"
+        + "labels:{color:'#94a3b8',usePointStyle:true}}},"
+        + "scales:{x:{ticks:{color:'#64748b'},grid:{color:'rgba(255,255,255,.04)'}},"
+        + "y:{beginAtZero:true,ticks:{color:'#64748b',stepSize:1},grid:{color:'rgba(255,255,255,.04)'}}}}});"
+    )
+    if owasp_labels:
+        script += _owasp_donut_script(owasp_labels, owasp_vals, s)
+    return script + "</script>"
+
+
+def render_dashboard(
+    repo_path: str,
+    findings: list[Finding],
+    suppressed: int,
+    mermaid_src: str = "",
+    traced_fn: str | None = None,
+    history: list | None = None,
+    verdict_map: dict | None = None,
+    risk_map: dict | None = None,
+    trace_res=None,
+) -> str:
+    """One-file HTML dashboard with tabbed UI: Overview · Findings · Blast Radius · History.
+
+    Composes the per-panel fragment functions (overview/findings/blast/history)
+    and wraps the document shell (header, tab bar, chart scripts).
+    """
+    history = history or []
+    s = summary(findings)
+    triage = verdict_map is not None
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    mode = "AI-triaged" if triage else "offline scan"
+    repo_short = _esc(repo_path.split("/")[-1] or repo_path.split("\\")[-1] or "Dashboard")
+    total = s["error"] + s["warning"] + s["info"]
+    owasp_labels, owasp_vals = _owasp_breakdown(findings)
+
+    # ── Per-panel fragments ───────────────────────────────────────────────────
+    ov_html = render_overview_fragment(findings, suppressed) + (
+        f'<div style="margin-top:12px;color:#475569;font-size:12px;padding:4px 0">'
+        f'Scanned: <b style="color:#94a3b8">{_esc(repo_path)}</b> &nbsp;·&nbsp; {mode} &nbsp;·&nbsp; {ts}'
+        + (' &nbsp;·&nbsp; <span style="color:#a78bfa">✦ AI triage enabled</span>' if triage else '')
+        + '</div>'
+    )
+    findings_tab = render_findings_fragment(findings, risk_map, verdict_map)
+    blast_tab = render_blast_fragment(trace_res, mermaid_src, traced_fn, repo_path)
+    hist_tab = render_history_fragment(history)
+
+    # ── Chart + mermaid scripts (shell-level: need shared data) ───────────────
+    chart_script = _dashboard_chart_script(history, owasp_labels, owasp_vals, s)
     mermaid_script = (
         '<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";'
         "mermaid.initialize({startOnLoad:true,theme:'dark'});</script>"
@@ -918,11 +953,12 @@ def render_dashboard(
         for i, (tid, label, badge) in enumerate(tabs)
     ) + "</div>"
 
+    # Stable panel ids let a live server swap one panel's innerHTML over SSE.
     tab_contents = (
-        f'<div id="tab-overview" class="tab-content active">{ov_html}</div>'
-        f'<div id="tab-findings" class="tab-content">{findings_tab}</div>'
-        f'<div id="tab-blast" class="tab-content">{blast_tab}</div>'
-        f'<div id="tab-history" class="tab-content">{hist_tab}</div>'
+        f'<div id="tab-overview" class="tab-content active"><div id="panel-overview">{ov_html}</div></div>'
+        f'<div id="tab-findings" class="tab-content"><div id="panel-findings">{findings_tab}</div></div>'
+        f'<div id="tab-blast" class="tab-content"><div id="panel-blast">{blast_tab}</div></div>'
+        f'<div id="tab-history" class="tab-content"><div id="panel-history">{hist_tab}</div></div>'
     )
 
     return (

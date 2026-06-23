@@ -2,6 +2,40 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/). Yêu cầu sản phẩm xem [PRD](./security-radar-prd.md), kiến trúc xem [System Architecture](./system-architecture.md).
 
+## [Unreleased] — radar serve: live localhost dashboard (2026-06-23)
+
+`radar serve [PATH] --port N --open --rules-only --ext .EXT` — thay workflow "chạy lại lệnh → sinh file HTML mới" bằng **1 lệnh mở tab trình duyệt** tự cập nhật theo từng lần lưu file.
+
+### Added
+
+- **`radar serve` command** — HTTP server trên `127.0.0.1` (không bind 0.0.0.0), SSE stream update DOM trực tiếp — không reload trang, không sinh file HTML mới.
+- **Tiered update model** — 3 tốc độ cập nhật khác nhau:
+  - *Instant*: findings + history cập nhật ngay sau mỗi lần save (incremental scan 1 file).
+  - *Debounced (~2s)*: graph + blast-radius refresh sau debounce dùng graph cache.
+  - *On-demand*: AI triage **chỉ chạy khi nhấn nút "Run AI triage"** — không bao giờ tự chạy (tốn tiền, cần `OPENAI_API_KEY`; hiển thị cảnh báo khi thiếu key; offline-safe).
+- **Dashboard tabs** — Overview (stat cards + OWASP/severity donut charts), Findings, Blast Radius, History, Graph (D3 force-directed); tất cả patch DOM qua SSE.
+- **Package `src/radar/serve/`** — `server.py` (ThreadingHTTPServer), `orchestrator.py`, `pipeline.py`, `templates/shell.html`, `static/app.js`, `static/app.css`, vendored chart.js.
+- **Zero new runtime dependency** — HTTP server dùng stdlib `http.server.ThreadingHTTPServer`; SSE không cần thư viện ngoài. D3 + Chart.js vendored vào `/static` (offline-capable).
+- **`[watch]` extra cho auto-update** — reuse watchdog machinery từ `radar watch`; không có watchdog → fallback static mode (scan 1 lần, không live-update).
+
+### Changed
+
+- **`scan/report.py`** — tách panel fragment renderers để serve có thể gọi độc lập từng phần.
+- **`graph/graph_viz.py`** — thêm `render_graph_fragment`; XSS hardening tooltip (escape untrusted content trước khi inject vào DOM).
+- **`watcher.py`** — tách `watch_loop` + `scan_file` thành hàm tái sử dụng (dùng bởi cả `radar watch` và `radar serve`).
+- **`triage/risk.py`** — tách `build_risk_map` ra khỏi CLI để serve pipeline gọi được.
+
+### Tests
+
+- +128 test (`test_serve_*`). Toàn bộ **334 passed / 9 skipped**.
+
+### Security
+
+- Server bind `127.0.0.1` only — không expose ra network.
+- Tooltip graph XSS hardened: escape untrusted content trước khi render vào DOM.
+
+---
+
 ## [Unreleased] — Unified Dashboard & Premium UI
 
 Gộp tất cả các chức năng (quét bảo mật, phân tích luồng ảnh hưởng, xu hướng lịch sử, AI triage) vào một file HTML dashboard duy nhất với giao diện Premium Tabbed UI, biểu đồ Chart.js và tính năng tìm kiếm.

@@ -63,9 +63,12 @@ def _radius(kind: str, members: int) -> float:
     return 5
 
 
-def to_dependency_html(graph: nx.DiGraph, repo_path: str = "") -> str:
-    """Return a self-contained HTML page with an interactive D3 force graph."""
+def _build_graph_data(graph: nx.DiGraph) -> tuple[list[dict], list[dict], list[dict], dict]:
+    """Build the D3 payload (nodes, edges, legend rows, stats) from an nx graph.
 
+    Single source of truth for both the full HTML page and the live fragment so
+    they stay in lockstep. Pure — no I/O.
+    """
     file_colors: dict[str, str] = {}
 
     # ── Build node list ───────────────────────────────────────────────────────
@@ -109,10 +112,10 @@ def to_dependency_html(graph: nx.DiGraph, repo_path: str = "") -> str:
     for n in nodes_json:
         file_count[n["file"]] = file_count.get(n["file"], 0) + max(n.get("members", 0), 1)
     top_files = sorted(file_count, key=lambda f: -file_count[f])[:15]
-    legend_items = json.dumps([
+    legend = [
         {"file": f, "color": file_colors.get(f, "#999"), "count": file_count[f]}
         for f in top_files
-    ])
+    ]
 
     stats = {
         "nodes":  len(nodes_json),
@@ -120,8 +123,41 @@ def to_dependency_html(graph: nx.DiGraph, repo_path: str = "") -> str:
         "files":  len(file_colors),
         "routes": sum(1 for n in nodes_json if n["kind"] == "route"),
     }
+    return nodes_json, edges_json, legend, stats
 
-    return _render(nodes_json, edges_json, legend_items, stats, repo_path)
+
+def to_dependency_html(graph: nx.DiGraph, repo_path: str = "") -> str:
+    """Return a self-contained HTML page with an interactive D3 force graph."""
+    nodes_json, edges_json, legend, stats = _build_graph_data(graph)
+    return _render(nodes_json, edges_json, json.dumps(legend), stats, repo_path)
+
+
+def render_graph_fragment(graph: nx.DiGraph, repo_path: str = "") -> dict:
+    """Return the D3 payload to (re)initialize the graph WITHOUT the page shell.
+
+    For the live `radar serve` dashboard: the server pushes this JSON over SSE
+    and the browser re-seeds the existing D3 simulation in place rather than
+    reloading a whole HTML document. The frozen-layout positions are computed
+    client-side from this data (same as the full page), so no <head>/CSS/D3
+    bundle is included here.
+
+    Returns:
+        {
+          "nodes":   [{id, nid, name, full, file, kind, line, color, members, r}, ...],
+          "edges":   [{source, target, kind, dashed}, ...],
+          "legend":  [{file, color, count}, ...],
+          "stats":   {nodes, edges, files, routes},
+          "repo_path": str,
+        }
+    """
+    nodes_json, edges_json, legend, stats = _build_graph_data(graph)
+    return {
+        "nodes": nodes_json,
+        "edges": edges_json,
+        "legend": legend,
+        "stats": stats,
+        "repo_path": repo_path.replace("\\", "/"),
+    }
 
 
 # ── HTML template (raw string — no f-string to avoid brace conflicts) ─────────
@@ -293,10 +329,14 @@ _HTML_TEMPLATE = (
     '  tip.style.display=\'block\';\n'
     '  tip.style.left=(e.clientX+14)+\'px\';\n'
     '  tip.style.top=(e.clientY-10)+\'px\';\n'
-    '  tip.innerHTML=\'<div class="tip-name">\'+d.full+\'</div>\'\n'
-    '    +\'<div class="tip-row"><b>File:</b> \'+d.file+\'</div>\'\n'
-    '    +\'<div class="tip-row"><b>Kind:</b> \'+d.kind+\'  <b>Line:</b> \'+d.line+\'</div>\'\n'
-    '    +\'<div class="tip-row"><b>Connections:</b> \'+nbrs.size+\'</div>\';\n'
+    '  tip.textContent=\'\';\n'
+    '  const _nm=document.createElement(\'div\'); _nm.className=\'tip-name\'; _nm.textContent=d.full; tip.appendChild(_nm);\n'
+    '  const _mkr=(lab,val)=>{const r=document.createElement(\'div\');r.className=\'tip-row\';const b=document.createElement(\'b\');b.textContent=lab;r.appendChild(b);r.appendChild(document.createTextNode(\' \'+val));return r;};\n'
+    '  tip.appendChild(_mkr(\'File:\',d.file));\n'
+    '  const _kr=document.createElement(\'div\'); _kr.className=\'tip-row\';\n'
+    '  const _kb=document.createElement(\'b\'); _kb.textContent=\'Kind:\'; _kr.appendChild(_kb); _kr.appendChild(document.createTextNode(\' \'+d.kind+\'  \'));\n'
+    '  const _lnb=document.createElement(\'b\'); _lnb.textContent=\'Line:\'; _kr.appendChild(_lnb); _kr.appendChild(document.createTextNode(\' \'+d.line)); tip.appendChild(_kr);\n'
+    '  tip.appendChild(_mkr(\'Connections:\',nbrs.size));\n'
     '}).on(\'mouseleave\', ()=>tip.style.display=\'none\');\n'
     '\n'
     'let selected = null;\n'
@@ -351,9 +391,9 @@ _HTML_TEMPLATE = (
     'LEGEND.forEach(row=>{\n'
     '  const el=document.createElement(\'div\');\n'
     '  el.className=\'leg-row\';\n'
-    '  el.innerHTML=\'<span class="leg-dot" style="background:\'+row.color+\'"></span>\'\n'
-    '    +\'<span>\'+row.file.split(\'/\').pop()+\'</span>\'\n'
-    '    +\'<span style="margin-left:auto;color:#4a6070">\'+row.count+\'</span>\';\n'
+    '  const _dot=document.createElement(\'span\'); _dot.className=\'leg-dot\'; _dot.style.background=row.color; el.appendChild(_dot);\n'
+    '  const _nm2=document.createElement(\'span\'); _nm2.textContent=row.file.split(\'/\').pop(); el.appendChild(_nm2);\n'
+    '  const _ct=document.createElement(\'span\'); _ct.style.cssText=\'margin-left:auto;color:#4a6070\'; _ct.textContent=row.count; el.appendChild(_ct);\n'
     '  el.addEventListener(\'click\',()=>{\n'
     '    const ids=new Set(NODES.filter(n=>n.file===row.file).map(n=>n.id));\n'
     '    setHighlight(null,ids);\n'

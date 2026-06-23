@@ -12,14 +12,11 @@ Design:
 from __future__ import annotations
 
 import json
-import os
 import subprocess
+import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
+from typing import Callable
 
 # Source file extensions to watch
 WATCHED_EXTENSIONS = {
@@ -118,6 +115,92 @@ def _docker_scan_file(filepath: Path, rules_dir: Path, repo_root: Path) -> list[
         return []
 
 
+def scan_file(
+    filepath: Path,
+    rules_dir: Path,
+    *,
+    use_docker: bool = False,
+    repo_root: Path | None = None,
+) -> list[dict]:
+    """Scan a single file, returning a list of {rule, line, message, severity}.
+
+    Public wrapper around the native/docker single-file scanners so callers
+    (``radar watch``, ``radar serve``) share one entry point. ``repo_root`` is
+    required when ``use_docker`` is True (the file is mounted relative to it).
+    """
+    if use_docker:
+        root = repo_root or filepath.parent
+        return _docker_scan_file(filepath, rules_dir, root)
+    return _scan_file(filepath, rules_dir)
+
+
+def watch_loop(
+    repo_root: Path,
+    extensions: set[str],
+    on_change: Callable[[Path], None],
+    *,
+    stop_event: threading.Event | None = None,
+) -> bool:
+    """Watch ``repo_root`` and call ``on_change(path)`` on each debounced edit.
+
+    Sets up a watchdog Observer; for every modify/create of a file whose suffix
+    is in ``extensions`` (after a ``_DEBOUNCE`` window) ``on_change`` is invoked
+    with the changed path. Runs until ``stop_event`` is set, or — when no event
+    is given — until KeyboardInterrupt. The observer is always stopped/joined.
+
+    Returns ``False`` (after printing an install hint) if watchdog is missing,
+    so callers can degrade gracefully; ``True`` on normal completion.
+    """
+    try:
+        from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
+    except ImportError:
+        print(
+            "\033[31m[radar watch] watchdog not installed.\033[0m\n"
+            "Run:  pip install 'security-radar[watch]'\n"
+        )
+        return False
+
+    _last_event: dict[str, float] = {}
+
+    class _Handler(FileSystemEventHandler):
+        def on_modified(self, event):
+            if event.is_directory:
+                return
+            path = Path(event.src_path)
+            if path.suffix not in extensions:
+                return
+            # Debounce repeated events for the same file
+            now = time.monotonic()
+            key = str(path)
+            if now - _last_event.get(key, 0) < _DEBOUNCE:
+                return
+            _last_event[key] = now
+            on_change(path)
+
+        on_created = on_modified
+
+    observer = Observer()
+    observer.schedule(_Handler(), str(repo_root), recursive=True)
+    observer.start()
+
+    try:
+        if stop_event is not None:
+            while not stop_event.is_set():
+                time.sleep(0.5)
+        else:
+            while True:
+                time.sleep(0.5)
+    except KeyboardInterrupt:
+        if stop_event is not None:
+            stop_event.set()
+        raise
+    finally:
+        observer.stop()
+        observer.join()
+    return True
+
+
 def _fmt_sev(sev: str) -> str:
     if sev == "ERROR":
         return "\033[31mERROR  \033[0m"
@@ -135,8 +218,7 @@ def run_watch(
 ) -> None:
     """Start the file watcher. Blocks until Ctrl-C."""
     try:
-        from watchdog.events import FileSystemEventHandler
-        from watchdog.observers import Observer
+        import watchdog.observers  # noqa: F401
     except ImportError:
         print(
             "\033[31m[radar watch] watchdog not installed.\033[0m\n"
@@ -146,47 +228,25 @@ def run_watch(
 
     watched_exts = extensions or WATCHED_EXTENSIONS
     state = _ScanState()
-    _last_event: dict[str, float] = {}
 
-    scanner = _docker_scan_file if use_docker else _scan_file
+    def on_change(path: Path) -> None:
+        rel = path.relative_to(repo_root) if path.is_absolute() else path
+        print(f"\n\033[2m[{time.strftime('%H:%M:%S')}] {rel} changed — scanning…\033[0m")
 
-    class _Handler(FileSystemEventHandler):
-        def on_modified(self, event):
-            if event.is_directory:
-                return
-            path = Path(event.src_path)
-            if path.suffix not in watched_exts:
-                return
-            # Debounce
-            now = time.monotonic()
-            key = str(path)
-            if now - _last_event.get(key, 0) < _DEBOUNCE:
-                return
-            _last_event[key] = now
+        findings = scan_file(path, rules_dir, use_docker=use_docker, repo_root=repo_root)
+        new_f, fixed_f = state.update(str(path), findings)
 
-            rel = path.relative_to(repo_root) if path.is_absolute() else path
-            print(f"\n\033[2m[{time.strftime('%H:%M:%S')}] {rel} changed — scanning…\033[0m")
+        if not new_f and not fixed_f:
+            print(f"\033[2m  ✓ no changes in findings\033[0m")
+            return
 
-            findings = scanner(path, rules_dir, repo_root) if use_docker else scanner(path, rules_dir)
-            new_f, fixed_f = state.update(str(path), findings)
+        for f in new_f:
+            sev = _fmt_sev(f["severity"])
+            print(f"  \033[1m⚡ NEW\033[0m  {sev} {rel}:\033[33m{f['line']}\033[0m  "
+                  f"\033[36m{f['rule']}\033[0m\n        {f['message']}")
 
-            if not new_f and not fixed_f:
-                print(f"\033[2m  ✓ no changes in findings\033[0m")
-                return
-
-            for f in new_f:
-                sev = _fmt_sev(f["severity"])
-                print(f"  \033[1m⚡ NEW\033[0m  {sev} {rel}:\033[33m{f['line']}\033[0m  "
-                      f"\033[36m{f['rule']}\033[0m\n        {f['message']}")
-
-            for f in fixed_f:
-                print(f"  \033[32m✓ FIXED\033[0m  {f['rule']}  line {f['line']}")
-
-        on_created = on_modified
-
-    observer = Observer()
-    observer.schedule(_Handler(), str(repo_root), recursive=True)
-    observer.start()
+        for f in fixed_f:
+            print(f"  \033[32m✓ FIXED\033[0m  {f['rule']}  line {f['line']}")
 
     print(
         f"\n\033[1m⚡ radar watch\033[0m  watching \033[36m{repo_root}\033[0m\n"
@@ -196,9 +256,6 @@ def run_watch(
     )
 
     try:
-        while True:
-            time.sleep(0.5)
+        watch_loop(repo_root, watched_exts, on_change)
     except KeyboardInterrupt:
         print("\n\033[2m[radar watch] stopped\033[0m")
-        observer.stop()
-    observer.join()

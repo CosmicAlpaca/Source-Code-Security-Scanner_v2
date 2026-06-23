@@ -84,6 +84,34 @@ def _reach_mult(reach) -> float:
     return 0.6
 
 
+def build_risk_map(root, graph, items, verdict_map: dict | None) -> dict:
+    """{id(finding): RiskScore} for every finding. No API key required.
+
+    Reach comes from the AI-triage result when present, else from per-finding
+    reachability on the (already-built) call graph; falls back to 'unknown' when
+    the graph is unavailable so a score is always produced.
+
+    Keyed by object identity, not (path,line,rule): Semgrep can emit several
+    findings at the same location/rule and they must not collapse into one score.
+    """
+    from radar.triage.reachability import Reach, reachability
+
+    risk_map: dict = {}
+    for f in items:
+        vkey = (f.path, f.line, f.rule)
+        verdict = None
+        if verdict_map and vkey in verdict_map:
+            entry = verdict_map[vkey]
+            reach = Reach(None, entry.get("routes") or [], entry.get("reach") or "unknown")
+            verdict = entry.get("verdict")
+        elif graph is not None:
+            reach = reachability(graph, f, root)
+        else:
+            reach = Reach(None, [], "unknown")
+        risk_map[id(f)] = risk_score(f, reach, verdict)
+    return risk_map
+
+
 def risk_score(finding, reach, verdict: dict | None = None) -> RiskScore:
     """Finding (+reachability, +optional AI verdict) -> RiskScore. No key required."""
     sev = finding.severity if finding.severity in _SEVERITY_W else "INFO"
