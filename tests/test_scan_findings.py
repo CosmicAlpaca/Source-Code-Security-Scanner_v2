@@ -48,3 +48,4 @@ def test_to_json_stable_schema():
     assert payload["summary"]["total"] == 3
     assert len(payload["findings"]) == 3
     assert payload["findings"][0]["severity"] == "ERROR"
+    assert payload["findings"][0]["engine"] == "semgrep"

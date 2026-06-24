@@ -12,12 +12,23 @@ from radar.scan.report import render_dashboard
 F = Finding(severity="ERROR", path="app/db.php", line=7, rule="php-sql-injection", message="SQLi")
 
 
+@pytest.fixture(autouse=True)
+def _no_external_scan_side_effects(monkeypatch):
+    from radar.scan import gitleaks_runner
+    from radar.scan import history
+
+    monkeypatch.setattr(gitleaks_runner, "run_gitleaks", lambda *a, **k: [])
+    monkeypatch.setattr(history, "record", lambda *a, **k: None)
+    monkeypatch.setattr(history, "load", lambda *a, **k: [])
+
+
 # ── render_dashboard unit ─────────────────────────────────────────────────────
 
 def test_offline_dashboard_has_five_columns_no_triage():
     html = render_dashboard("repo", [F], suppressed=0)
     assert "Reachability" not in html and "AI verdict" not in html
-    assert 'colspan="5"' in html
+    assert 'colspan="6"' in html
+    assert ">Tool<" in html and "Semgrep" in html
     assert 'class="finding-row"' in html
 
 
@@ -27,8 +38,20 @@ def test_triaged_dashboard_has_seven_columns():
         "verdict": {"exploitability": "likely", "confidence": 0.8, "reasoning": "user input → query"}}}
     html = render_dashboard("repo", [F], suppressed=0, verdict_map=vm)
     assert "Reachability" in html and "AI verdict" in html
-    assert 'colspan="7"' in html
+    assert 'colspan="8"' in html
     assert "likely" in html and "reachable" in html and "80%" in html
+
+
+def test_dashboard_shows_finding_engine():
+    gitleaks = Finding(
+        severity="ERROR",
+        path=".env",
+        line=1,
+        rule="gitleaks.aws-access-token",
+        message="secret",
+    )
+    html = render_dashboard("repo", [gitleaks], suppressed=0)
+    assert "Gitleaks" in html
 
 
 def test_reasoning_and_message_are_html_escaped():
