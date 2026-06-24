@@ -17,6 +17,7 @@
 - **Package `src/radar/serve/`** — `server.py` (ThreadingHTTPServer), `orchestrator.py`, `pipeline.py`, `templates/shell.html`, `static/app.js`, `static/app.css`, vendored chart.js.
 - **Zero new runtime dependency** — HTTP server dùng stdlib `http.server.ThreadingHTTPServer`; SSE không cần thư viện ngoài. D3 + Chart.js vendored vào `/static` (offline-capable).
 - **`[watch]` extra cho auto-update** — reuse watchdog machinery từ `radar watch`; không có watchdog → fallback static mode (scan 1 lần, không live-update).
+- **Impact-first Blast tab** — `radar serve` mở mặc định tab **Blast Radius**, mode-aware: **Changes** (`git diff HEAD` — mọi thay đổi uncommitted), **This file** (file vừa save, kể cả file mới chưa commit), **Findings** (top findings), và **trace function theo tên**. Blast cập nhật **tức thì mỗi lần save** (graph cache + BFS, **không** re-scan semgrep). Endpoint `POST /api/impact?mode=`. Overlay findings lên blast node dùng `state.findings` sẵn có (không re-scan). Reuse `impact.tracer` + `impact.diff_mapper`. Frontend re-execute inline `<script>` khi swap blast panel để D3 con render đúng.
 
 ### Changed
 
@@ -27,7 +28,7 @@
 
 ### Tests
 
-- +128 test (`test_serve_*`). Toàn bộ **334 passed / 9 skipped**.
+- +144 test (`test_serve_*`, gồm `test_serve_impact.py`). Toàn bộ **352 passed / 9 skipped**.
 
 ### Security
 

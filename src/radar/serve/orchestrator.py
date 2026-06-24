@@ -41,6 +41,9 @@ class State:
         self.mermaid_src: str = ""
         self.trace_label: str | None = None
         self.repo_path: str = ""
+        # Impact (blast-radius) tracking — impact-first live view.
+        self.impact_mode: str = "changes"  # changes | file | findings | function
+        self.impact_target: str | None = None  # last-saved file (file mode) / fn name
 
     def to_json(self) -> str:
         """JSON snapshot for GET /api/state. Prefer Orchestrator.state_json() in the
@@ -61,6 +64,7 @@ class State:
             "mermaid_src": self.mermaid_src,
             "trace_label": self.trace_label,
             "repo_path": self.repo_path,
+            "impact_mode": self.impact_mode,
         }
 
 
@@ -87,6 +91,7 @@ def _render_state_json(snap: dict) -> str:
         "charts": _chart_data(findings, snap["history"]),
         "graph": graph_payload,
         "summary": summary(findings),
+        "impact_mode": snap.get("impact_mode", "changes"),
     })
 
 
@@ -129,10 +134,10 @@ class Orchestrator:
             self.state.suppressed = data["suppressed"]
             self.state.risk_map = data["risk_map"]
             self.state.graph = data["graph"]
-            self.state.trace_res = data["trace_res"]
-            self.state.mermaid_src = data["mermaid_src"]
-            self.state.trace_label = data["trace_label"]
             self.state.history = data["history"]
+        # Blast radius is mode-aware (changes / file / findings) → trace after the
+        # graph + findings are set. Cheap (cached graph + BFS, no semgrep).
+        self._compute_impact()
         self._push_all_panels()
         self._push_status("idle", "ok")
 
@@ -164,8 +169,130 @@ class Orchestrator:
 
         self._push_findings()
         self._push_overview()
+        # Impact-first: remember the file just saved and, if the Blast tab is
+        # tracking edits, refresh the blast radius cheaply (cached graph + BFS,
+        # no semgrep) so impact updates live with your changes.
+        with self._lock:
+            mode = self.state.impact_mode
+            if mode != "function":  # don't clobber a pinned function name
+                self.state.impact_target = rel
+        if mode in ("changes", "file"):
+            try:
+                self.recompute_impact(changed_path=rel)
+            except Exception as exc:
+                self._push_status(f"impact refresh failed: {exc}", "warn")
         self._push_status("idle", "ok")
         self.schedule_heavy()
+
+    # ── Impact (blast radius) — mode-aware ───────────────────────────────────
+    def recompute_impact(self, changed_path: str | None = None) -> None:
+        """Recompute the blast radius for the current mode and push the blast panel."""
+        if changed_path is not None:
+            with self._lock:
+                self.state.impact_target = changed_path
+        self._compute_impact()
+        self._push_blast()
+
+    def set_impact_mode(self, mode: str, function: str | None = None) -> None:
+        """Switch the Blast tab's trace source, recompute, and push."""
+        mode = mode if mode in ("changes", "file", "findings", "function") else "changes"
+        with self._lock:
+            self.state.impact_mode = mode
+            if mode == "function":
+                self.state.impact_target = function
+        self.recompute_impact()
+        self._push_status(f"impact: {mode}", "ok")
+
+    def _compute_impact(self) -> None:
+        """Set state.trace_res / mermaid_src / trace_label for the current mode.
+        No push — callers push blast. Reuses impact.tracer + diff_mapper."""
+        from radar.impact.tracer import trace
+        from radar.report.exporters import to_mermaid
+
+        with self._lock:
+            graph = self.state.graph
+            findings = list(self.state.findings)
+            mode = self.state.impact_mode
+            target = self.state.impact_target
+
+        if graph is None:
+            with self._lock:
+                self.state.trace_res = None
+                self.state.mermaid_src = ""
+                self.state.trace_label = "building dependency graph…"
+            return
+
+        ids, label = self._impact_ids(graph, findings, mode, target)
+        trace_res = trace(graph, ids) if ids else None
+        if trace_res is not None:
+            self._overlay_findings_from_state(graph, trace_res, findings)
+            mermaid = to_mermaid(trace_res)
+        else:
+            mermaid = ""
+        with self._lock:
+            self.state.trace_res = trace_res
+            self.state.mermaid_src = mermaid
+            self.state.trace_label = label
+
+    def _impact_ids(self, graph, findings, mode, target):
+        """Return (changed_node_ids, label) for the active impact mode."""
+        from radar.impact.diff_mapper import (changed_lines, find_function_nodes,
+                                              map_to_nodes)
+
+        if mode == "findings":
+            sev_rank = {"ERROR": 0, "WARNING": 1, "INFO": 2}
+            ranked = sorted(findings, key=lambda f: sev_rank.get(f.severity, 3))
+            changes: dict = {}
+            for f in ranked[:15]:
+                changes.setdefault(f.path, set()).add(f.line)
+            ids = map_to_nodes(graph, changes) if changes else []
+            return ids, (f"{len(ids)} finding site(s)" if ids else "no findings to trace")
+
+        if mode == "function":
+            ids = find_function_nodes(graph, target) if target else []
+            return ids, (f"function: {target}" if ids else f"no function '{target}'")
+
+        if mode == "file":
+            if not target:
+                return [], "save a file to trace it"
+            ids = self._nodes_in_file(graph, target)
+            return ids, (f"file: {target}" if ids else f"no traceable nodes in {target}")
+
+        # changes (default): blast radius of all uncommitted changes vs HEAD.
+        try:
+            changes = changed_lines(self.root, rev="HEAD")
+        except Exception:
+            return [], "not a git repo / no diff against HEAD"
+        ids = map_to_nodes(graph, changes) if changes else []
+        return ids, (f"{len(changes)} changed file(s) vs HEAD" if ids
+                     else "no uncommitted changes")
+
+    @staticmethod
+    def _nodes_in_file(graph, rel: str):
+        """All function node ids in a file (fallback: the file node) — for 'this file' mode."""
+        rel = rel.replace("\\", "/")
+        fns = sorted(n for n, d in graph.nodes(data=True)
+                     if d.get("kind") == "function" and d.get("file") == rel)
+        if fns:
+            return fns
+        return sorted(n for n, d in graph.nodes(data=True)
+                      if d.get("kind") == "file" and d.get("file") == rel)
+
+    @staticmethod
+    def _overlay_findings_from_state(graph, result, findings) -> None:
+        """Tag blast-radius nodes that carry a finding — using already-scanned
+        state.findings (NO re-scan), unlike cli._overlay_findings."""
+        from collections import defaultdict
+
+        from radar.impact.diff_mapper import map_to_nodes
+
+        by_node: dict = defaultdict(list)
+        for f in findings:
+            for nid in map_to_nodes(graph, {f.path: {f.line}}):
+                by_node[nid].append({"severity": f.severity, "rule": f.rule.rsplit(".", 1)[-1]})
+        for item in (*result.changed, *result.affected):
+            if item.id in by_node:
+                item.findings = by_node[item.id]
 
     def _best_effort_risk_map(self, items: list[Finding]) -> dict:
         from radar.triage.reachability import Reach

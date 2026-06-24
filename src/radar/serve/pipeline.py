@@ -44,31 +44,20 @@ def compute_full_state(root: Path, *, rules_only: bool = False) -> dict:
     except Exception:
         pass
 
-    # ── 2. Impact graph (blast radius) ───────────────────────────────────────
-    mermaid_src = ""
-    trace_label = None
+    # ── 2. Dependency graph ──────────────────────────────────────────────────
+    # Build the graph only; the blast-radius trace is computed mode-aware in the
+    # orchestrator (changes / file / findings) so it can follow your edits.
     graph = None
-    trace_res = None
     try:
         from radar.config import load_config
         from radar.graph.builder import build_graph
-        from radar.impact.diff_mapper import map_to_nodes
-        from radar.impact.tracer import trace
-        from radar.report.exporters import to_mermaid
 
         graph = build_graph(root, config=load_config(root))
-        sev_rank = {"ERROR": 0, "WARNING": 1, "INFO": 2}
-        ranked = sorted(items, key=lambda f: sev_rank.get(f.severity, 3))
-        changes: dict = {}
-        for f in ranked[:15]:
-            changes.setdefault(f.path, set()).add(f.line)
-        node_ids = map_to_nodes(graph, changes) if changes else []
-        if node_ids:
-            trace_label = f"{len(node_ids)} finding site(s)"
-            trace_res = trace(graph, node_ids)
-            mermaid_src = to_mermaid(trace_res)
     except Exception:
-        graph = graph  # keep whatever built; impact just skipped
+        graph = None
+    mermaid_src = ""
+    trace_label = None
+    trace_res = None
 
     # ── 3. Risk ranking (works without AI) ───────────────────────────────────
     from radar.triage.risk import build_risk_map
@@ -77,6 +66,22 @@ def compute_full_state(root: Path, *, rules_only: bool = False) -> dict:
 
     # ── 4. History trend ─────────────────────────────────────────────────────
     history = load_history(path_filter=str(root), limit=20)
+
+    # ── 5. Normalize finding paths to repo-relative forward-slash ─────────────
+    # Semgrep emits absolute, OS-native paths; the fast-path on_change uses
+    # repo-relative forward-slash. Canonicalize here (in place, preserving object
+    # identity so the id()-keyed risk_map stays valid) so the orchestrator's
+    # per-file replacement matches and edits clear/update correctly. Done AFTER
+    # graph/impact/risk so their original-path mapping is untouched.
+    import os as _os
+    root_abs = root.resolve()
+    for f in items:
+        try:
+            p = Path(f.path)
+            f.path = (str(p.relative_to(root_abs)) if p.is_absolute()
+                      else f.path).replace(_os.sep, "/")
+        except (ValueError, OSError):
+            f.path = f.path.replace(_os.sep, "/")
 
     return {
         "findings": items,

@@ -26,6 +26,24 @@
 .triage-btn:hover{background:rgba(167,139,250,.28);color:#ddd6fe;}
 .triage-btn:disabled{opacity:.5;cursor:default;}
 
+/* ── Impact toolbar (Blast tab) ── */
+.impact-toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:14px 24px 0 24px;
+}
+.impact-label{font-size:11px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;margin-right:4px;}
+.imp-btn{
+  background:rgba(255,255,255,.05);border:1px solid var(--border);
+  color:var(--muted);font-size:11px;font-weight:700;padding:5px 12px;border-radius:16px;
+  cursor:pointer;font-family:inherit;transition:.15s;
+}
+.imp-btn:hover{background:rgba(255,255,255,.1);color:var(--text);}
+.imp-btn.active{
+  background:rgba(99,102,241,.2);border-color:rgba(129,140,248,.5);color:#c7d2fe;
+}
+.impact-toolbar .search-box{max-width:220px;margin-left:auto;}
+
 /* ── Graph panel ── */
 .graph-toolbar{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
 .graph-stats{font-size:11px;color:var(--muted);font-weight:600;}

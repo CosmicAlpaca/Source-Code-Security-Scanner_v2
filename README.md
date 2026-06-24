@@ -19,16 +19,27 @@ Và một **trục xuyên suốt**: mọi finding được **xếp hạng theo R
 
 ## Phần 1 — Cài đặt
 
+**Cách nhanh nhất — cài thẳng từ GitHub** (Python ≥ 3.11, không cần clone):
+
 ```bash
-git clone https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2.git
-cd Source-Code-Security-Scanner_v2
-pip install .              # Python ≥ 3.11
+pip install "security-radar[watch] @ git+https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2.git@v1.1"
 radar --help
 ```
 
-> 💡 **Windows**: nếu `pip`/`radar` bị chặn bởi policy, dùng `python -m pip install .` và `python -m radar.cli` thay thế.
+> `[watch]` thêm watchdog để `radar serve` tự cập nhật khi save (bỏ đi vẫn chạy, chỉ mất live-update). Đổi `@v1.1` thành `@main` để lấy bản mới nhất.
 
-`radar scan` cần một Semgrep runtime — tool tự tìm theo thứ tự:
+**Cách dev (clone để sửa code):**
+
+```bash
+git clone https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2.git
+cd Source-Code-Security-Scanner_v2
+pip install -e ".[watch]"   # editable — code đổi là CLI cập nhật theo
+radar --help
+```
+
+> 💡 **Windows**: nếu `pip`/`radar` bị chặn bởi policy, dùng `python -m pip install …` và `python -m radar.cli` thay thế.
+
+`radar scan`/`serve` cần một **Semgrep** runtime trên mỗi máy (radar gọi qua subprocess, không phải pip-dep) — tool tự tìm theo thứ tự:
 - **native** `semgrep` trên PATH (Linux/Mac: `pipx install semgrep`), hoặc
 - **Docker** (`semgrep/semgrep`) — fallback khi không có native (Windows thường dùng cách này, chỉ cần Docker Desktop bật).
 
@@ -242,12 +253,26 @@ radar serve . --ext .rb --ext .php  # theo dõi thêm extension
 
 Dashboard gồm 5 tab: **Overview** (stat cards + OWASP/severity donut charts), **Findings**, **Blast Radius**, **History**, **Graph** (D3 force-directed).
 
-### Mô hình cập nhật 3 tốc độ
+### Impact-first: tab Blast Radius (mặc định)
+
+`radar serve` mở thẳng tab **Blast Radius** để tập trung câu hỏi *"thay đổi của tôi ảnh hưởng tới đâu"*. Chọn nguồn trace ở thanh **Trace impact of:**
+
+| Mode | Trace gì | Cập nhật |
+|---|---|---|
+| **Changes (vs HEAD)** *(mặc định)* | Mọi thay đổi uncommitted (`git diff HEAD`) → function/API/feature bị ảnh hưởng | mỗi lần save (nhanh — graph cache + BFS, **không** chạy semgrep) |
+| **This file** | File vừa save (kể cả file mới chưa commit) | mỗi lần save |
+| **Findings** | Blast radius của top findings (hành vi cũ) | debounce |
+| ô **trace a function…** | 1 hàm theo tên | khi nhấn Enter |
+
+Node trong blast radius mang lỗ hổng được **đánh dấu overlay** (dùng kết quả scan sẵn có, không re-scan) → trả lời *"thay đổi của tôi có chạm code dính lỗ hổng không"*.
+
+### Mô hình cập nhật
 
 | Loại dữ liệu | Khi nào cập nhật | Lý do |
 |---|---|---|
 | Findings + History | **Tức thì** sau mỗi lần save | Incremental scan 1 file, nhanh |
-| Graph + Blast Radius | **~2 giây** sau save (debounce) | Cần rebuild graph, dùng cache |
+| **Blast Radius** (mode Changes/This file) | **Tức thì** sau mỗi lần save | Graph cache + BFS trace, không chạy semgrep |
+| Graph (full) | **~2 giây** sau save (debounce) | Cần rebuild full graph, dùng cache |
 | AI Triage | **On-demand** (nút "Run AI triage") | Tốn tiền + cần `OPENAI_API_KEY`; không bao giờ tự chạy; cảnh báo nếu thiếu key |
 
 - **Không cần dependency mới** cho HTTP/SSE — dùng stdlib `http.server.ThreadingHTTPServer`. D3 + Chart.js vendored vào package (offline-capable).
