@@ -19,16 +19,27 @@ Và một **trục xuyên suốt**: mọi finding được **xếp hạng theo R
 
 ## Phần 1 — Cài đặt
 
+**Cách nhanh nhất — cài thẳng từ GitHub** (Python ≥ 3.11, không cần clone):
+
 ```bash
-git clone https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2.git
-cd Source-Code-Security-Scanner_v2
-pip install .              # Python ≥ 3.11
+pip install "security-radar[watch] @ git+https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2.git@v1.1"
 radar --help
 ```
 
-> 💡 **Windows**: nếu `pip`/`radar` bị chặn bởi policy, dùng `python -m pip install .` và `python -m radar.cli` thay thế.
+> `[watch]` thêm watchdog để `radar serve` tự cập nhật khi save (bỏ đi vẫn chạy, chỉ mất live-update). Đổi `@v1.1` thành `@main` để lấy bản mới nhất.
 
-`radar scan` cần một Semgrep runtime — tool tự tìm theo thứ tự:
+**Cách dev (clone để sửa code):**
+
+```bash
+git clone https://github.com/CosmicAlpaca/Source-Code-Security-Scanner_v2.git
+cd Source-Code-Security-Scanner_v2
+pip install -e ".[watch]"   # editable — code đổi là CLI cập nhật theo
+radar --help
+```
+
+> 💡 **Windows**: nếu `pip`/`radar` bị chặn bởi policy, dùng `python -m pip install …` và `python -m radar.cli` thay thế.
+
+`radar scan`/`serve` cần một **Semgrep** runtime trên mỗi máy (radar gọi qua subprocess, không phải pip-dep) — tool tự tìm theo thứ tự:
 - **native** `semgrep` trên PATH (Linux/Mac: `pipx install semgrep`), hoặc
 - **Docker** (`semgrep/semgrep`) — fallback khi không có native (Windows thường dùng cách này, chỉ cần Docker Desktop bật).
 
