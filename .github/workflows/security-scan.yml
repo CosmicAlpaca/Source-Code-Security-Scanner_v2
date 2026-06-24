@@ -19,6 +19,7 @@ jobs:
       contents: read
       security-events: write   # SARIF -> Security tab
       pull-requests: write     # PR comment
+      actions: read            # codeql-action upload-sarif reads the workflow run (get-a-workflow-run)
     steps:
       - uses: actions/checkout@v4
         with:
