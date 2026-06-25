@@ -19,6 +19,7 @@ permissions:
   contents: read
   security-events: write   # upload SARIF to the Security tab
   pull-requests: write     # post the PR comment
+  actions: read            # codeql-action reads the workflow run (get-a-workflow-run)
 
 jobs:
   radar:

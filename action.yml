@@ -66,9 +66,14 @@ runs:
         if [ "${{ inputs.rules-only }}" = "true" ]; then EXTRA="--rules-only"; fi
         radar scan "${{ inputs.path }}" --format sarif $EXTRA > radar.sarif
 
+    # Non-fatal: many target repos (private without GHAS, fork PRs, or code
+    # scanning disabled) can't accept SARIF — "Resource not accessible by
+    # integration". The scan, PR comment and artifact still succeed, so a missing
+    # Security tab must not red-X the whole run. Set sarif: false to skip entirely.
     - name: Upload SARIF to Security tab
       if: ${{ inputs.sarif == 'true' }}
-      uses: github/codeql-action/upload-sarif@v3
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: radar.sarif
 

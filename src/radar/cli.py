@@ -133,40 +133,100 @@ def impact(rev, staged, function_name, path, max_depth, no_name_only, do_finding
             click.echo(content)
 
 
+@main.command("engines")
+def engines_cmd() -> None:
+    """List scanner engines and whether their runtime is available."""
+    from rich.table import Table
+
+    from radar.scan.engines import all_engines
+
+    table = Table(title="Scanner engines", show_lines=False)
+    table.add_column("Engine", style="cyan", no_wrap=True)
+    table.add_column("Default")
+    table.add_column("Runtime")
+    table.add_column("Description")
+    for eng in all_engines():
+        try:
+            runtime = eng.detect()
+        except Exception as exc:
+            runtime = f"error: {exc}"
+        table.add_row(
+            eng.name,
+            "yes" if eng.default else "no",
+            runtime or "unavailable",
+            eng.description,
+        )
+    console.print(table)
+
+
 @main.command()
 @click.argument("path", type=click.Path(exists=True, file_okay=False), default=".")
 @click.option("--rules-only", is_flag=True, help="Skip registry presets — only bundled custom rules (offline)")
 @click.option("--config", "extra", multiple=True, help="Extra semgrep --config (repeatable)")
+@click.option("--engine", "engine_names", multiple=True,
+              help="Scanner engine to run (repeatable): semgrep, gitleaks, bandit, trivy")
+@click.option("--all-tools", is_flag=True,
+              help="Run all default engines (Semgrep, Gitleaks, Bandit, Trivy)")
 @click.option("--format", "output_format", type=click.Choice(["terminal", "json", "sarif", "html"]),
               default="terminal", help="Output format")
 @click.option("--out-file", "out_file", default=None, help="Write output to file (used with --format html)")
 @click.option("--error", "gate", is_flag=True, help="Exit non-zero when findings reach --fail-on severity")
 @click.option("--fail-on", type=click.Choice(["error", "warning", "info"]), default="error",
               help="Severity threshold for --error (default: error)")
-def scan(path, rules_only, extra, output_format, out_file, gate, fail_on) -> None:
-    """Run a Semgrep security scan on PATH (local, zero footprint on the target)."""
+def scan(path, rules_only, extra, engine_names, all_tools, output_format, out_file, gate, fail_on) -> None:
+    """Run security scanners on PATH (Semgrep by default; opt into all tools)."""
     from radar.scan import findings as findings_mod
     from radar.scan.runner import ScanError, detect_runtime, run_semgrep
 
     root = Path(path).resolve()
+
+    selected_engines = list(engine_names)
+    if all_tools and selected_engines:
+        console.print("[red]scan failed:[/] use either --all-tools or --engine, not both")
+        sys.exit(2)
+    if not all_tools and not selected_engines:
+        # Backwards-compatible default: historical `radar scan` remains Semgrep-only.
+        selected_engines = ["semgrep"]
+
+    if output_format == "sarif":
+        # SARIF is currently Semgrep-native. The normalized Finding model does
+        # not yet have a cross-engine SARIF exporter.
+        if all_tools or selected_engines != ["semgrep"]:
+            console.print("[red]scan failed:[/] --format sarif currently supports Semgrep only")
+            sys.exit(2)
+        try:
+            runtime = detect_runtime()
+            report = run_semgrep(
+                root, rules_only=rules_only, sarif=True, extra_config=list(extra),
+                runtime=runtime,
+            )
+        except ScanError as exc:
+            console.print(f"[red]scan failed:[/] {exc}")
+            sys.exit(2)
+        import json as _json
+        click.echo(_json.dumps(report, indent=1))
+        return
+
     try:
-        runtime = detect_runtime()
-        if output_format in ("terminal", "html"):
-            console.print(f"[dim]scanning {root} via semgrep ({runtime})…[/]", highlight=False)
-        report = run_semgrep(
-            root, rules_only=rules_only, sarif=(output_format == "sarif"), extra_config=list(extra),
-            runtime=runtime,
+        from radar.scan.engines import ran_any, runs_summary, scan_all
+        items, runs = scan_all(
+            root,
+            rules_only=rules_only,
+            engines=None if all_tools else selected_engines,
+            extra_config=list(extra),
+            emit=(lambda m: console.print(m, highlight=False)) if output_format in ("terminal", "html") else None,
         )
     except ScanError as exc:
         console.print(f"[red]scan failed:[/] {exc}")
         sys.exit(2)
 
-    if output_format == "sarif":
-        import json as _json
-        click.echo(_json.dumps(report, indent=1))
-        return
-
-    items = findings_mod.parse(report)
+    if not ran_any(runs):
+        console.print("[red]scan failed:[/] no selected scanner engine could run")
+        if runs:
+            console.print(f"[dim]{runs_summary(runs)}[/]")
+        sys.exit(2)
+    if output_format in ("terminal", "html"):
+        console.print(f"[dim]{runs_summary(runs)}[/]", highlight=False)
 
     # Apply suppression (inline radar-ignore comments + .radar-ignore file)
     from radar.scan.suppress import filter_findings
@@ -449,6 +509,10 @@ def serve(path, port, open_browser, rules_only, extra_exts) -> None:
 @main.command()
 @click.argument("path", type=click.Path(exists=True, file_okay=False), default=".")
 @click.option("--rules-only", is_flag=True, help="Offline scan — only bundled custom rules")
+@click.option("--engine", "engine_names", multiple=True,
+              help="Scanner engine to include (repeatable): semgrep, gitleaks, bandit, trivy")
+@click.option("--all-tools", is_flag=True,
+              help="Run all default engines in the dashboard report")
 @click.option("--function", "function_name", default=None,
               help="Function to trace blast radius for (default: auto-pick top ERROR finding)")
 @click.option("--diff", default=None, help="Trace blast radius from git diff (e.g. origin/main...HEAD)")
@@ -459,7 +523,7 @@ def serve(path, port, open_browser, rules_only, extra_exts) -> None:
 @click.option("--force", is_flag=True, help="With --triage: ignore cached verdicts and re-query the model")
 @click.option("--out", "out_file", default=None,
               help="Output HTML path (default: <path>/radar-dashboard.html)")
-def report(path, rules_only, function_name, diff, do_triage, floor, force, out_file) -> None:
+def report(path, rules_only, engine_names, all_tools, function_name, diff, do_triage, floor, force, out_file) -> None:
     """Generate a unified HTML dashboard: findings + impact graph + history trend.
 
     Add --triage to enrich each finding with reachability + an AI verdict column
@@ -468,14 +532,24 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
     from radar.scan import findings as findings_mod
     from radar.scan.history import load as load_history
     from radar.scan.report import render_dashboard
-    from radar.scan.runner import ScanError, detect_runtime, run_semgrep
+    from radar.scan.runner import ScanError
     from radar.scan.suppress import filter_findings
 
     root = Path(path).resolve()
     dest = Path(out_file).resolve() if out_file else root / "radar-dashboard.html"
+    selected_engines = list(engine_names)
+    if all_tools and selected_engines:
+        console.print("[red]report failed:[/] use either --all-tools or --engine, not both")
+        raise SystemExit(2)
+    if do_triage and (all_tools or selected_engines):
+        console.print("[red]report failed:[/] --triage currently supports the Semgrep-only report flow")
+        raise SystemExit(2)
+    if not all_tools and not selected_engines:
+        selected_engines = ["semgrep"]
 
     items: list = []
     suppressed: list = []
+    runs_summary_text = ""
     verdict_map: dict | None = None
 
     # ── 1. Scan (+ optional AI triage) ───────────────────────────────────────
@@ -504,19 +578,25 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
     if not do_triage:
         console.print("[dim]① scanning…[/]")
         try:
-            runtime = detect_runtime()
-            raw = run_semgrep(root, rules_only=rules_only, sarif=False, extra_config=[], runtime=runtime)
+            from radar.scan.engines import ran_any, runs_summary, scan_all
+
+            items, runs = scan_all(
+                root,
+                rules_only=rules_only,
+                engines=None if all_tools else selected_engines,
+                extra_config=[],
+                emit=lambda m: console.print(m, highlight=False),
+            )
         except ScanError as exc:
             console.print(f"[red]scan failed:[/] {exc}")
             raise SystemExit(2)
-        items = findings_mod.parse(raw)
-        
-        from radar.scan.gitleaks_runner import run_gitleaks
-        items.extend(run_gitleaks(root))
-        
-        from radar.scan.findings import SEVERITY_ORDER
-        items.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 3), f.path, f.line))
-        
+        if not ran_any(runs):
+            console.print("[red]scan failed:[/] no selected scanner engine could run")
+            if runs:
+                console.print(f"[dim]{runs_summary(runs)}[/]")
+            raise SystemExit(2)
+        runs_summary_text = runs_summary(runs)
+        console.print(f"[dim]{runs_summary_text}[/]", highlight=False)
         items, suppressed = filter_findings(items, root)
 
     smry = findings_mod.summary(items)
@@ -585,6 +665,7 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
     console.print(f"[bold green]✓[/] Dashboard → [cyan]{dest}[/]")
     console.print(
         f"   {smry['error']} error · {smry['warning']} warning · {len(suppressed)} suppressed"
+        + (f" · tools: {runs_summary_text}" if runs_summary_text else "")
         + (" · AI-triaged" if verdict_map is not None else "")
         + (f" · impact graph: {trace_label}" if mermaid_src else " · impact graph: skipped")
     )
@@ -711,6 +792,8 @@ def analyze(ctx, url: str, branch: str | None, function_name: str | None, out_fi
         report,
         path=str(repo_dir),
         rules_only=False,
+        engine_names=(),
+        all_tools=not do_triage,
         function_name=function_name,
         diff=diff_target,
         do_triage=do_triage,

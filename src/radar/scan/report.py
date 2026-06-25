@@ -23,6 +23,20 @@ SEVERITY_STYLE = {"ERROR": "red", "WARNING": "yellow", "INFO": "blue"}
 SEVERITY_EMOJI = {"ERROR": "🔴", "WARNING": "🟡", "INFO": "🔵"}
 
 
+def finding_engine(f: Finding) -> str:
+    """Human-readable scanner name for a finding."""
+    raw = str((f.metadata or {}).get("engine") or "").strip().lower()
+    if not raw:
+        prefix = f.rule.split(".", 1)[0].lower()
+        raw = prefix if prefix in {"semgrep", "gitleaks", "bandit", "trivy"} else "semgrep"
+    return {
+        "semgrep": "Semgrep",
+        "gitleaks": "Gitleaks",
+        "bandit": "Bandit",
+        "trivy": "Trivy",
+    }.get(raw, raw.title() if raw else "Semgrep")
+
+
 def render_terminal(findings: list[Finding], console: Console | None = None) -> None:
     console = console or Console()
     s = summary(findings)
@@ -35,6 +49,7 @@ def render_terminal(findings: list[Finding], console: Console | None = None) -> 
 
     table = Table(show_lines=False, expand=False)
     table.add_column("Severity")
+    table.add_column("Tool")
     table.add_column("Location", style="cyan", no_wrap=True)
     table.add_column("Rule", style="magenta")
     table.add_column("Message")
@@ -43,7 +58,7 @@ def render_terminal(findings: list[Finding], console: Console | None = None) -> 
         sev = f"{SEVERITY_EMOJI.get(f.severity, '')} [{style}]{f.severity}[/]"
         rule = escape(f.rule.rsplit(".", 1)[-1])
         message = escape(f.message[:MAX_MESSAGE])
-        table.add_row(sev, escape(f"{f.path}:{f.line}"), rule, message)
+        table.add_row(sev, escape(finding_engine(f)), escape(f"{f.path}:{f.line}"), rule, message)
     console.print(table)
 
 
@@ -52,7 +67,14 @@ def to_json(findings: list[Finding]) -> str:
         "schema": 1,
         "summary": summary(findings),
         "findings": [
-            {"severity": f.severity, "path": f.path, "line": f.line, "rule": f.rule, "message": f.message}
+            {
+                "severity": f.severity,
+                "engine": finding_engine(f).lower(),
+                "path": f.path,
+                "line": f.line,
+                "rule": f.rule,
+                "message": f.message,
+            }
             for f in findings
         ],
     }
@@ -257,7 +279,7 @@ def to_html(findings: list[Finding], repo_path: str = "", suppressed: int = 0) -
     for path, file_findings in sorted(by_file.items()):
         rows_html += (
             '<tr class="file-row">'
-            '<td colspan="5" style="background:#f0f3f7;padding:8px 14px;font-weight:700;'
+            '<td colspan="6" style="background:#f0f3f7;padding:8px 14px;font-weight:700;'
             'font-size:13px;color:#34495e;border-top:2px solid #d5dce8">'
             "📄 " + path + ' <span style="color:#7f8c8d;font-weight:400">('
             + str(len(file_findings)) + " finding" + ("s" if len(file_findings) != 1 else "") + ")"
@@ -271,6 +293,8 @@ def to_html(findings: list[Finding], repo_path: str = "", suppressed: int = 0) -
                 '<tr class="finding-row" data-sev="' + sev + '">'
                 '<td style="padding:10px 14px;text-align:center">'
                 + _badge(sev, _SEV_COLOR[sev], _SEV_BG[sev]) +
+                '</td><td style="padding:10px 14px;font-size:12px;color:#34495e;font-weight:700">'
+                + _esc(finding_engine(f)) +
                 '</td><td style="padding:10px 14px;font-family:monospace;color:#2471a3">'
                 '<span style="color:#7f8c8d">line </span>' + str(f.line) +
                 '</td><td style="padding:10px 14px;font-family:monospace;font-size:13px;color:#6c3483">'
@@ -318,6 +342,7 @@ def to_html(findings: list[Finding], repo_path: str = "", suppressed: int = 0) -
         "" if not findings else
         "<table><thead><tr>"
         '<th style="width:110px">Severity</th>'
+        '<th style="width:110px">Tool</th>'
         '<th style="width:80px">Line</th>'
         '<th style="width:220px">Rule</th>'
         '<th style="width:160px">OWASP</th>'
@@ -426,6 +451,7 @@ def _ranked_row(f: Finding, score, verdict_map: dict | None) -> str:
     cells = (
         '<td style="padding:8px 12px;text-align:center">' + _risk_cell(score) + "</td>"
         '<td style="padding:8px 12px;text-align:center">' + _badge(_esc(sev), _SEV_COLOR.get(sev, "#7f8c8d"), _SEV_BG.get(sev, "white")) + "</td>"
+        '<td style="padding:8px 12px;font-size:12px;color:#cbd5e1;font-weight:700">' + _esc(finding_engine(f)) + "</td>"
         '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#2471a3">' + _esc(f.path) + ":" + str(f.line) + "</td>"
         '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#6c3483">' + _esc(rule_short) + "</td>"
         '<td style="padding:8px 12px">' + _owasp_chip(oc, ol) + "</td>"
@@ -445,6 +471,7 @@ def _ranked_table(rows_html: str, verdict_map: dict | None) -> str:
     return (
         "<table><thead><tr>"
         '<th style="width:110px">Risk</th><th style="width:90px">Severity</th>'
+        '<th style="width:110px">Tool</th>'
         '<th style="width:200px">Location</th><th style="width:170px">Rule</th>'
         '<th style="width:140px">OWASP</th><th>Message</th>' + extra
         + '</tr></thead><tbody id="tbody">' + rows_html + "</tbody></table>"
@@ -488,7 +515,7 @@ def _ranked_findings_html(findings: list[Finding], risk_map: dict, verdict_map: 
 def _dashboard_rows(findings: list[Finding], verdict_map: dict | None) -> str:
     """Findings table rows; +2 cells per row (reachability, AI verdict) when triaged."""
     triage = verdict_map is not None
-    span = 7 if triage else 5
+    span = 8 if triage else 6
     by_file: dict[str, list[Finding]] = defaultdict(list)
     for f in findings:
         by_file[f.path].append(f)
@@ -506,6 +533,7 @@ def _dashboard_rows(findings: list[Finding], verdict_map: dict | None) -> str:
             sev = f.severity
             cells = (
                 '<td style="padding:8px 12px;text-align:center">' + _badge(_esc(sev), _SEV_COLOR.get(sev, "#7f8c8d"), _SEV_BG.get(sev, "white")) + "</td>"
+                '<td style="padding:8px 12px;font-size:12px;color:#cbd5e1;font-weight:700">' + _esc(finding_engine(f)) + "</td>"
                 '<td style="padding:8px 12px;font-family:monospace;color:#2471a3">' + str(f.line) + "</td>"
                 '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#6c3483">' + _esc(rule_short) + "</td>"
                 '<td style="padding:8px 12px">' + _owasp_chip(oc, ol) + "</td>"
@@ -545,7 +573,7 @@ def _findings_table(findings: list[Finding], risk_map: dict | None, verdict_map:
     extra_head = "<th>Reachability</th><th>AI verdict</th>" if verdict_map is not None else ""
     return (
         "<table><thead><tr>"
-        '<th style="width:90px">Severity</th><th style="width:60px">Line</th>'
+        '<th style="width:90px">Severity</th><th style="width:110px">Tool</th><th style="width:60px">Line</th>'
         '<th style="width:180px">Rule</th><th style="width:140px">OWASP</th><th>Message</th>'
         + extra_head
         + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"

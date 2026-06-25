@@ -39,6 +39,20 @@ def owasp_tag(rule: str) -> tuple[str, str]:
     return ("A00", "Other")
 
 
+_OWASP_LABELS = {code: label for code, label in OWASP_MAP.values()}
+
+
+def owasp_tag_for(finding: "Finding") -> tuple[str, str]:
+    """OWASP category for a normalized finding, preferring engine metadata."""
+    raw = str((finding.metadata or {}).get("owasp") or "").strip()
+    if raw:
+        code = raw.split(":", 1)[0].split("-", 1)[0].strip()
+        if code:
+            label = raw.split("-", 1)[-1].strip() if "-" in raw else _OWASP_LABELS.get(code, "Other")
+            return code, label or "Other"
+    return owasp_tag(finding.rule.rsplit(".", 1)[-1])
+
+
 @dataclass
 class Finding:
     severity: str  # ERROR | WARNING | INFO

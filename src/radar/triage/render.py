@@ -11,7 +11,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from radar.scan.findings import summary
-from radar.scan.report import SEVERITY_EMOJI
+from radar.scan.report import SEVERITY_EMOJI, finding_engine
 
 EXPLOIT_STYLE = {
     "exploitable": "bold red",
@@ -66,6 +66,7 @@ def render_terminal_triage(results, console: Console | None = None, risk_map: di
     table = Table(show_lines=False, expand=False)
     table.add_column("Risk")
     table.add_column("Sev")
+    table.add_column("Tool")
     table.add_column("Location", style="cyan", no_wrap=True)
     table.add_column("Rule", style="magenta")
     table.add_column("Reach")
@@ -83,6 +84,7 @@ def render_terminal_triage(results, console: Console | None = None, risk_map: di
         table.add_row(
             _risk_cell(score),
             SEVERITY_EMOJI.get(f.severity, ""),
+            escape(finding_engine(f)),
             escape(f"{f.path}:{f.line}"),
             escape(f.rule.rsplit(".", 1)[-1]),
             _reach_cell(tf.reach),
@@ -98,6 +100,7 @@ def to_json_triage(results, risk_map: dict | None = None) -> str:
         f = tf.finding
         obj = {
             "severity": f.severity,
+            "engine": finding_engine(f).lower(),
             "path": f.path,
             "line": f.line,
             "rule": f.rule,
