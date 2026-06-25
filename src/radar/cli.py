@@ -509,6 +509,10 @@ def serve(path, port, open_browser, rules_only, extra_exts) -> None:
 @main.command()
 @click.argument("path", type=click.Path(exists=True, file_okay=False), default=".")
 @click.option("--rules-only", is_flag=True, help="Offline scan — only bundled custom rules")
+@click.option("--engine", "engine_names", multiple=True,
+              help="Scanner engine to include (repeatable): semgrep, gitleaks, bandit, trivy")
+@click.option("--all-tools", is_flag=True,
+              help="Run all default engines in the dashboard report")
 @click.option("--function", "function_name", default=None,
               help="Function to trace blast radius for (default: auto-pick top ERROR finding)")
 @click.option("--diff", default=None, help="Trace blast radius from git diff (e.g. origin/main...HEAD)")
@@ -519,7 +523,7 @@ def serve(path, port, open_browser, rules_only, extra_exts) -> None:
 @click.option("--force", is_flag=True, help="With --triage: ignore cached verdicts and re-query the model")
 @click.option("--out", "out_file", default=None,
               help="Output HTML path (default: <path>/radar-dashboard.html)")
-def report(path, rules_only, function_name, diff, do_triage, floor, force, out_file) -> None:
+def report(path, rules_only, engine_names, all_tools, function_name, diff, do_triage, floor, force, out_file) -> None:
     """Generate a unified HTML dashboard: findings + impact graph + history trend.
 
     Add --triage to enrich each finding with reachability + an AI verdict column
@@ -528,14 +532,24 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
     from radar.scan import findings as findings_mod
     from radar.scan.history import load as load_history
     from radar.scan.report import render_dashboard
-    from radar.scan.runner import ScanError, detect_runtime, run_semgrep
+    from radar.scan.runner import ScanError
     from radar.scan.suppress import filter_findings
 
     root = Path(path).resolve()
     dest = Path(out_file).resolve() if out_file else root / "radar-dashboard.html"
+    selected_engines = list(engine_names)
+    if all_tools and selected_engines:
+        console.print("[red]report failed:[/] use either --all-tools or --engine, not both")
+        raise SystemExit(2)
+    if do_triage and (all_tools or selected_engines):
+        console.print("[red]report failed:[/] --triage currently supports the Semgrep-only report flow")
+        raise SystemExit(2)
+    if not all_tools and not selected_engines:
+        selected_engines = ["semgrep"]
 
     items: list = []
     suppressed: list = []
+    runs_summary_text = ""
     verdict_map: dict | None = None
 
     # ── 1. Scan (+ optional AI triage) ───────────────────────────────────────
@@ -564,19 +578,25 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
     if not do_triage:
         console.print("[dim]① scanning…[/]")
         try:
-            runtime = detect_runtime()
-            raw = run_semgrep(root, rules_only=rules_only, sarif=False, extra_config=[], runtime=runtime)
+            from radar.scan.engines import ran_any, runs_summary, scan_all
+
+            items, runs = scan_all(
+                root,
+                rules_only=rules_only,
+                engines=None if all_tools else selected_engines,
+                extra_config=[],
+                emit=lambda m: console.print(m, highlight=False),
+            )
         except ScanError as exc:
             console.print(f"[red]scan failed:[/] {exc}")
             raise SystemExit(2)
-        items = findings_mod.parse(raw)
-        
-        from radar.scan.gitleaks_runner import run_gitleaks
-        items.extend(run_gitleaks(root))
-        
-        from radar.scan.findings import SEVERITY_ORDER
-        items.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 3), f.path, f.line))
-        
+        if not ran_any(runs):
+            console.print("[red]scan failed:[/] no selected scanner engine could run")
+            if runs:
+                console.print(f"[dim]{runs_summary(runs)}[/]")
+            raise SystemExit(2)
+        runs_summary_text = runs_summary(runs)
+        console.print(f"[dim]{runs_summary_text}[/]", highlight=False)
         items, suppressed = filter_findings(items, root)
 
     smry = findings_mod.summary(items)
@@ -645,6 +665,7 @@ def report(path, rules_only, function_name, diff, do_triage, floor, force, out_f
     console.print(f"[bold green]✓[/] Dashboard → [cyan]{dest}[/]")
     console.print(
         f"   {smry['error']} error · {smry['warning']} warning · {len(suppressed)} suppressed"
+        + (f" · tools: {runs_summary_text}" if runs_summary_text else "")
         + (" · AI-triaged" if verdict_map is not None else "")
         + (f" · impact graph: {trace_label}" if mermaid_src else " · impact graph: skipped")
     )
@@ -771,6 +792,8 @@ def analyze(ctx, url: str, branch: str | None, function_name: str | None, out_fi
         report,
         path=str(repo_dir),
         rules_only=False,
+        engine_names=(),
+        all_tools=not do_triage,
         function_name=function_name,
         diff=diff_target,
         do_triage=do_triage,
