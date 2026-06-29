@@ -281,6 +281,27 @@ Node trong blast radius mang lỗ hổng được **đánh dấu overlay** (dùn
 
 ---
 
+## Phần 3.9 — Interactive Web App (React + FastAPI)
+
+Phiên bản mới bổ sung một ứng dụng Dashboard Native mạnh mẽ được viết bằng **React** (Frontend) và **FastAPI** (Backend). Giao diện này cung cấp tính năng tự động Git Clone qua URL, tuỳ chỉnh Blast Radius target linh hoạt, và đồ thị D3.js tương tác siêu mượt.
+
+Để khởi chạy, bạn cần mở 2 Terminal và chạy song song:
+
+**1. Khởi động Backend (FastAPI):**
+```bash
+cd radar-webapp/backend
+uvicorn main:app --port 8000 --reload
+```
+
+**2. Khởi động Frontend (React + Vite):**
+```bash
+cd radar-webapp/frontend
+npm run dev
+```
+Sau đó truy cập `http://localhost:5173` trên trình duyệt để sử dụng.
+
+---
+
 ## Phần 4 — Gắn vào CI (GitHub Action)
 
 Radar được đóng gói thành **GitHub Action** — bạn **không cần copy rules/script** vào repo, chỉ thêm **1 file workflow ~12 dòng**:
