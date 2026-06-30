@@ -484,9 +484,13 @@ def watch(path, extra_exts) -> None:
 @click.option("--port", type=int, default=None, help="Port to bind (default: auto-pick a free one)")
 @click.option("--open", "open_browser", is_flag=True, help="Open the dashboard in your browser")
 @click.option("--rules-only", is_flag=True, help="Offline scan — only bundled custom rules")
+@click.option("--engine", "engine_names", multiple=True,
+              help="Scanner engine to include (repeatable): semgrep, gitleaks, bandit, trivy")
+@click.option("--all-tools", is_flag=True,
+              help="Run all default engines in the live dashboard")
 @click.option("--ext", "extra_exts", multiple=True,
               help="Extra file extensions to watch (e.g. --ext .rb --ext .php)")
-def serve(path, port, open_browser, rules_only, extra_exts) -> None:
+def serve(path, port, open_browser, rules_only, engine_names, all_tools, extra_exts) -> None:
     """Live localhost dashboard — auto-updates as you edit.
 
     Findings instant, graph/impact debounced, AI triage on-demand.
@@ -497,12 +501,20 @@ def serve(path, port, open_browser, rules_only, extra_exts) -> None:
     from radar.serve import serve as serve_dashboard
 
     root = Path(path).resolve()
+    selected_engines = list(engine_names)
+    if all_tools and selected_engines:
+        console.print("[red]serve failed:[/] use either --all-tools or --engine, not both")
+        raise SystemExit(2)
+    if not all_tools and not selected_engines:
+        selected_engines = ["semgrep"]
+
     use_docker = not shutil.which("semgrep") and shutil.which("docker")
     exts = WATCHED_EXTENSIONS | {e if e.startswith(".") else f".{e}" for e in extra_exts}
 
     serve_dashboard(
         root, port=port, open_browser=open_browser, extensions=exts,
         rules_only=rules_only, use_docker=use_docker,
+        engines=None if all_tools else selected_engines,
     )
 
 

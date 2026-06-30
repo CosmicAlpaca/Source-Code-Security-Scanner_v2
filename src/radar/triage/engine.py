@@ -3,9 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from radar.scan import findings as findings_mod
 from radar.scan.findings import FAIL_THRESHOLD, SEVERITY_ORDER, Finding
-from radar.scan.runner import detect_runtime, run_semgrep
+from radar.scan.engines import scan_all
 from radar.triage import llm_client
 from radar.triage.prompt import build_messages, redact
 from radar.triage.reachability import Reach, reachability
@@ -58,15 +57,12 @@ def triage(
     emit = emit or (lambda _msg: None)
     llm_client.load_dotenv(root)
 
-    runtime = detect_runtime()
-    report = run_semgrep(root, rules_only=rules_only, extra_config=list(extra_config or []), runtime=runtime)
-    items = findings_mod.parse(report)
-    
-    from radar.scan.gitleaks_runner import run_gitleaks
-    items.extend(run_gitleaks(root))
-    
-    from radar.scan.findings import SEVERITY_ORDER
-    items.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 3), f.path, f.line))
+    items, _runs = scan_all(
+        root,
+        rules_only=rules_only,
+        engines=["semgrep", "gitleaks"],
+        extra_config=list(extra_config or []),
+    )
     
     if not only_all:
         items = [f for f in items if _passes_floor(f, floor)]

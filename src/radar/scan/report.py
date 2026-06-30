@@ -295,10 +295,10 @@ def to_html(findings: list[Finding], repo_path: str = "", suppressed: int = 0) -
                 + _badge(sev, _SEV_COLOR[sev], _SEV_BG[sev]) +
                 '</td><td style="padding:10px 14px;font-size:12px;color:#34495e;font-weight:700">'
                 + _esc(finding_engine(f)) +
-                '</td><td style="padding:10px 14px;font-family:monospace;color:#2471a3">'
-                '<span style="color:#7f8c8d">line </span>' + str(f.line) +
-                '</td><td style="padding:10px 14px;font-family:monospace;font-size:13px;color:#6c3483">'
-                + rule_short +
+                '</td><td style="padding:10px 14px">'
+                + _location_cell(f.path, f.line) +
+                '</td><td style="padding:10px 14px">'
+                + _rule_cell(rule_short) +
                 '</td><td style="padding:10px 14px">'
                 + _owasp_chip(owasp_code, owasp_label) +
                 '</td><td style="padding:10px 14px;font-size:13px;color:#2c3e50">'
@@ -343,7 +343,7 @@ def to_html(findings: list[Finding], repo_path: str = "", suppressed: int = 0) -
         "<table><thead><tr>"
         '<th style="width:110px">Severity</th>'
         '<th style="width:110px">Tool</th>'
-        '<th style="width:80px">Line</th>'
+        '<th style="width:220px">Location</th>'
         '<th style="width:220px">Rule</th>'
         '<th style="width:160px">OWASP</th>'
         "<th>Message</th>"
@@ -444,6 +444,25 @@ def _risk_cell(score) -> str:
     return '<span title="' + title + '">' + _badge(str(score.value) + " " + score.band, color, "white") + "</span>"
 
 
+def _location_cell(path: str, line: int) -> str:
+    text = _esc(path) + ":" + str(line)
+    return (
+        '<span style="display:inline-block;color:#7dd3fc;font-family:ui-monospace,SFMono-Regular,'
+        'Consolas,monospace;font-size:12px;font-weight:650;line-height:1.45;'
+        'word-break:break-word;overflow-wrap:anywhere">' + text + "</span>"
+    )
+
+
+def _rule_cell(rule: str) -> str:
+    return (
+        '<span style="display:inline-block;padding:3px 8px;border-radius:999px;'
+        'border:1px solid rgba(216,180,254,.34);background:rgba(126,34,206,.18);'
+        'color:#e9d5ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;'
+        'font-size:12px;font-weight:700;line-height:1.35;word-break:break-word;'
+        'overflow-wrap:anywhere">' + _esc(rule) + "</span>"
+    )
+
+
 def _ranked_row(f: Finding, score, verdict_map: dict | None) -> str:
     sev = f.severity
     rule_short = f.rule.rsplit(".", 1)[-1]
@@ -452,8 +471,8 @@ def _ranked_row(f: Finding, score, verdict_map: dict | None) -> str:
         '<td style="padding:8px 12px;text-align:center">' + _risk_cell(score) + "</td>"
         '<td style="padding:8px 12px;text-align:center">' + _badge(_esc(sev), _SEV_COLOR.get(sev, "#7f8c8d"), _SEV_BG.get(sev, "white")) + "</td>"
         '<td style="padding:8px 12px;font-size:12px;color:#cbd5e1;font-weight:700">' + _esc(finding_engine(f)) + "</td>"
-        '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#2471a3">' + _esc(f.path) + ":" + str(f.line) + "</td>"
-        '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#6c3483">' + _esc(rule_short) + "</td>"
+        '<td style="padding:8px 12px">' + _location_cell(f.path, f.line) + "</td>"
+        '<td style="padding:8px 12px">' + _rule_cell(rule_short) + "</td>"
         '<td style="padding:8px 12px">' + _owasp_chip(oc, ol) + "</td>"
         '<td style="padding:8px 12px;font-size:13px">' + _esc(f.message[:160]) + "</td>"
     )
@@ -534,8 +553,8 @@ def _dashboard_rows(findings: list[Finding], verdict_map: dict | None) -> str:
             cells = (
                 '<td style="padding:8px 12px;text-align:center">' + _badge(_esc(sev), _SEV_COLOR.get(sev, "#7f8c8d"), _SEV_BG.get(sev, "white")) + "</td>"
                 '<td style="padding:8px 12px;font-size:12px;color:#cbd5e1;font-weight:700">' + _esc(finding_engine(f)) + "</td>"
-                '<td style="padding:8px 12px;font-family:monospace;color:#2471a3">' + str(f.line) + "</td>"
-                '<td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#6c3483">' + _esc(rule_short) + "</td>"
+                '<td style="padding:8px 12px">' + _location_cell(f.path, f.line) + "</td>"
+                '<td style="padding:8px 12px">' + _rule_cell(rule_short) + "</td>"
                 '<td style="padding:8px 12px">' + _owasp_chip(oc, ol) + "</td>"
                 '<td style="padding:8px 12px;font-size:13px">' + _esc(f.message[:160]) + "</td>"
             )
@@ -573,7 +592,7 @@ def _findings_table(findings: list[Finding], risk_map: dict | None, verdict_map:
     extra_head = "<th>Reachability</th><th>AI verdict</th>" if verdict_map is not None else ""
     return (
         "<table><thead><tr>"
-        '<th style="width:90px">Severity</th><th style="width:110px">Tool</th><th style="width:60px">Line</th>'
+        '<th style="width:90px">Severity</th><th style="width:110px">Tool</th><th style="width:220px">Location</th>'
         '<th style="width:180px">Rule</th><th style="width:140px">OWASP</th><th>Message</th>'
         + extra_head
         + '</tr></thead><tbody id="tbody">' + _dashboard_rows(findings, verdict_map) + "</tbody></table>"
@@ -678,7 +697,12 @@ def render_blast_fragment(trace_res=None, mermaid_src: str = "", traced_fn: str 
             sub = nx.DiGraph()
             for item in trace_res.changed + trace_res.affected:
                 sub.add_node(item.id, name=item.name, kind=item.kind,
-                             file=item.file, start_line=item.line)
+                             file=item.file, start_line=item.line,
+                             feature=item.feature or "", depth=item.depth,
+                             via_changed=item.via_changed, parent=item.parent,
+                             confidence=item.confidence,
+                             routes=item.routes or [], findings=item.findings or [],
+                             changed=item.id in {c.id for c in trace_res.changed})
             # Add edges from parent relationships
             for item in trace_res.affected:
                 if item.parent and item.parent in all_ids:
@@ -711,6 +735,8 @@ def render_blast_fragment(trace_res=None, mermaid_src: str = "", traced_fn: str 
             for i, nid in enumerate(sorted(sub.nodes)):
                 d = sub.nodes[nid]
                 kind = d.get("kind", "function")
+                incoming = sorted(sub.predecessors(nid))
+                outgoing = sorted(sub.successors(nid))
                 ns_out.append({
                     "id": i, "nid": nid,
                     "name": _short_name(d.get("name", nid)),
@@ -718,6 +744,17 @@ def render_blast_fragment(trace_res=None, mermaid_src: str = "", traced_fn: str 
                     "file": d.get("file", ""),
                     "kind": kind,
                     "line": d.get("start_line", 0),
+                    "feature": d.get("feature", ""),
+                    "depth": d.get("depth", 0),
+                    "via_changed": d.get("via_changed", ""),
+                    "parent": d.get("parent", ""),
+                    "confidence": d.get("confidence", "resolved"),
+                    "routes": d.get("routes", []),
+                    "findings": d.get("findings", []),
+                    "changed": bool(d.get("changed")),
+                    "origin": nid if d.get("changed") else d.get("via_changed", ""),
+                    "incoming": incoming,
+                    "outgoing": outgoing,
                     "color": _col(d.get("file", "")),
                     "r": 10 if kind == "route" else (7 if kind == "function" else 5),
                 })
@@ -733,12 +770,36 @@ def render_blast_fragment(trace_res=None, mermaid_src: str = "", traced_fn: str 
 
             nodes_js = _json.dumps(ns_out)
             edges_js = _json.dumps(es_out)
+            changed_nodes = [n for n in ns_out if n.get("changed")]
+            default_change_js = _json.dumps(trace_res.changed[-1].id if trace_res.changed else "")
+            change_list_html = ""
+            if changed_nodes:
+                change_buttons = "".join(
+                    '<button type="button" class="d3change-btn" data-change-id="' + _esc(n["nid"]) + '" '
+                    'style="text-align:left;padding:6px 9px;border:1px solid rgba(255,255,255,.1);'
+                    'border-radius:8px;background:rgba(255,255,255,.04);color:#cbd5e1;font-size:11px;'
+                    'font-family:inherit;cursor:pointer;min-width:180px;max-width:320px">'
+                    '<b style="color:#93c5fd">' + _esc(n["name"]) + '</b>'
+                    '<span style="display:block;color:#64748b;font-family:monospace;white-space:nowrap;'
+                    'overflow:hidden;text-overflow:ellipsis">' + _esc(n["file"]) + ':' + str(n["line"]) + '</span>'
+                    '</button>'
+                    for n in changed_nodes
+                )
+                change_list_html = (
+                    '<div id="d3change-list" style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;'
+                    'background:rgba(10,15,30,.55);border-bottom:1px solid rgba(255,255,255,.08)">'
+                    '<div style="width:100%;font-size:10px;color:#64748b;font-weight:800;text-transform:uppercase;'
+                    'letter-spacing:.08em">Changed entry points</div>'
+                    + change_buttons +
+                    '</div>'
+                )
 
             blast_graph_section = f"""
 <div style="margin:0 24px 24px 24px;border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden">
   <div style="padding:10px 16px;background:rgba(10,15,30,.6);font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.06em">
-    🕸 Interactive D3 Force Graph &nbsp;·&nbsp; {len(ns_out)} nodes &nbsp;·&nbsp; {len(es_out)} edges &nbsp;·&nbsp; drag · scroll · hover · search
+    🕸 Interactive D3 Force Graph &nbsp;·&nbsp; {len(changed_nodes)} change(s) &nbsp;·&nbsp; {len(ns_out)} nodes &nbsp;·&nbsp; {len(es_out)} edges &nbsp;·&nbsp; drag · scroll · hover · search
   </div>
+  {change_list_html}
   {d3_script}
   <div style="position:relative;background:#0f1923">
     <input id="d3search" placeholder="Search function / file…"
@@ -750,16 +811,123 @@ def render_blast_fragment(trace_res=None, mermaid_src: str = "", traced_fn: str 
          border-radius:6px;padding:10px 14px;font-size:12px;line-height:1.6;
          pointer-events:none;display:none;z-index:20;max-width:320px;color:#cdd6e0"></div>
   </div>
+  <div id="d3node-detail" style="display:none;border-top:1px solid rgba(255,255,255,.08);
+       background:rgba(10,15,30,.72);padding:16px 18px;color:#cbd5e1;font-size:12px;line-height:1.6"></div>
   <script>
   (function(){{
     var NODES={nodes_js};
     var EDGES={edges_js};
+    var DEFAULT_CHANGE={default_change_js};
+    var nodeById={{}};
+    NODES.forEach(function(n){{nodeById[n.nid]=n;}});
+    function esc(v){{
+      return String(v==null?'':v).replace(/[&<>"']/g,function(c){{
+        return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c];
+      }});
+    }}
+    function pill(text,color){{
+      return '<span style="display:inline-block;border:1px solid '+color+';color:'+color+';border-radius:999px;padding:1px 7px;margin-right:5px;font-size:10px;font-weight:700">'+esc(text)+'</span>';
+    }}
+    function linkList(ids){{
+      if(!ids||!ids.length)return '<span style="color:#64748b">none</span>';
+      return ids.map(function(id){{
+        var n=nodeById[id]||{{name:id,file:''}};
+        return '<button type="button" data-node-id="'+esc(id)+'" style="display:block;width:100%;text-align:left;margin:3px 0;padding:4px 7px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.04);color:#93c5fd;font:inherit;cursor:pointer">'+esc(n.name)+' <span style="color:#64748b">('+esc(n.file)+')</span></button>';
+      }}).join('');
+    }}
+    function findingsList(items){{
+      if(!items||!items.length)return '<span style="color:#64748b">none</span>';
+      return items.map(function(f){{
+        return '<div style="margin:3px 0">'+pill(f.severity||'?',f.severity==='ERROR'?'#fca5a5':(f.severity==='WARNING'?'#fdba74':'#93c5fd'))+esc(f.rule||'')+'</div>';
+      }}).join('');
+    }}
+    function showNodeDetail(d){{
+      var box=document.getElementById('d3node-detail');
+      if(!box)return;
+      box.style.display='block';
+      box.innerHTML =
+        '<div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap">'+
+          '<div><div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:800;letter-spacing:.08em;margin-bottom:4px">Selected Node</div>'+
+          '<div style="font-size:16px;color:#e2e8f0;font-weight:800">'+esc(d.full)+'</div>'+
+          '<div style="font-family:monospace;color:#94a3b8;margin-top:2px">'+esc(d.nid)+'</div></div>'+
+          '<button type="button" id="d3detail-close" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#94a3b8;border-radius:6px;padding:4px 9px;cursor:pointer">Close</button>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px">'+
+          '<div><b style="color:#64748b">Kind</b><br>'+pill(d.kind,d.kind==='route'?'#22c55e':(d.kind==='file'?'#f97316':'#3b82f6'))+(d.changed?pill('changed','#a78bfa'):'')+'</div>'+
+          '<div><b style="color:#64748b">Location</b><br><span style="font-family:monospace">'+esc(d.file)+':'+esc(d.line)+'</span></div>'+
+          '<div><b style="color:#64748b">Depth</b><br>'+esc(d.depth)+' · '+esc(d.confidence||'resolved')+'</div>'+
+          '<div><b style="color:#64748b">Feature</b><br>'+(d.feature?esc(d.feature):'<span style="color:#64748b">none</span>')+'</div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">'+
+          '<div><b style="color:#64748b">Routes</b><br>'+((d.routes&&d.routes.length)?d.routes.map(function(r){{return pill(r,'#22c55e');}}).join(''):'<span style="color:#64748b">none</span>')+'</div>'+
+          '<div><b style="color:#64748b">Findings on node</b><br>'+findingsList(d.findings)+'</div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px">'+
+          '<div><b style="color:#64748b">Depends on / Parent</b><br>'+linkList(d.incoming)+'</div>'+
+          '<div><b style="color:#64748b">Impacts / Children</b><br>'+linkList(d.outgoing)+'</div>'+
+        '</div>';
+      document.getElementById('d3detail-close').onclick=function(){{box.style.display='none';}};
+      box.querySelectorAll('[data-node-id]').forEach(function(btn){{
+        btn.addEventListener('click',function(){{
+          var n=nodeById[this.getAttribute('data-node-id')];
+          if(n)showNodeDetail(n);
+        }});
+      }});
+      box.scrollIntoView({{behavior:'smooth',block:'nearest'}});
+    }}
+    var changedIds=NODES.filter(function(n){{return n.changed;}}).map(function(n){{return n.nid;}});
+    var activeChange=DEFAULT_CHANGE||changedIds[changedIds.length-1]||'';
+    var searchQuery='';
+    function nodeInActiveChange(d){{
+      return !activeChange||d.nid===activeChange||d.via_changed===activeChange||d.origin===activeChange;
+    }}
+    function edgeNode(v){{
+      return typeof v==='object'?v:NODES[v];
+    }}
+    function edgeInActiveChange(e){{
+      var s=edgeNode(e.source),t=edgeNode(e.target);
+      return s&&t&&nodeInActiveChange(s)&&nodeInActiveChange(t);
+    }}
+    function searchMatches(d){{
+      return !searchQuery||d.name.toLowerCase().includes(searchQuery)||d.file.toLowerCase().includes(searchQuery)||d.nid.toLowerCase().includes(searchQuery);
+    }}
+    function applyChangeFilter(){{
+      node.style('display',function(d){{return nodeInActiveChange(d)?null:'none';}});
+      link.style('display',function(d){{return edgeInActiveChange(d)?null:'none';}});
+      node.selectAll('circle').attr('opacity',function(d){{return searchMatches(d)?1:.08;}});
+      document.querySelectorAll('.d3change-btn').forEach(function(btn){{
+        var on=btn.getAttribute('data-change-id')===activeChange;
+        btn.style.background=on?'rgba(59,130,246,.2)':'rgba(255,255,255,.04)';
+        btn.style.borderColor=on?'rgba(59,130,246,.55)':'rgba(255,255,255,.1)';
+      }});
+      var first=nodeById[activeChange];
+      if(first)showNodeDetail(first);
+      setTimeout(fitActive,40);
+    }}
+    document.querySelectorAll('.d3change-btn').forEach(function(btn){{
+      btn.addEventListener('click',function(){{
+        activeChange=this.getAttribute('data-change-id')||'';
+        applyChangeFilter();
+      }});
+    }});
     var svg=d3.select('#d3canvas');
     var W=svg.node().getBoundingClientRect().width||900,H=580;
     svg.attr('width',W).attr('height',H);
     var g=svg.append('g');
     var zoom=d3.zoom().scaleExtent([.05,8]).on('zoom',function(e){{g.attr('transform',e.transform);}});
     svg.call(zoom);
+    function fitActive(){{
+      var active=NODES.filter(nodeInActiveChange);
+      if(!active.length)return;
+      var minX=d3.min(active,function(d){{return d.x||0;}}),maxX=d3.max(active,function(d){{return d.x||0;}});
+      var minY=d3.min(active,function(d){{return d.y||0;}}),maxY=d3.max(active,function(d){{return d.y||0;}});
+      var bw=Math.max(maxX-minX,80),bh=Math.max(maxY-minY,80),pad=70;
+      var box=svg.node().getBoundingClientRect(),ww=box.width||W,hh=box.height||H;
+      var sc=Math.min((ww-pad*2)/bw,(hh-pad*2)/bh,1.6);
+      if(!isFinite(sc)||sc<=0)sc=1;
+      var tx=ww/2-sc*(minX+bw/2),ty=hh/2-sc*(minY+bh/2);
+      svg.transition().duration(350).call(zoom.transform,d3.zoomIdentity.translate(tx,ty).scale(sc));
+    }}
     var sim=d3.forceSimulation(NODES)
       .force('link',d3.forceLink(EDGES).id(function(d){{return d.id;}}).distance(function(d){{return d.dashed?90:55;}}).strength(0.5))
       .force('charge',d3.forceManyBody().strength(-160))
@@ -805,23 +973,24 @@ def render_blast_fragment(trace_res=None, mermaid_src: str = "", traced_fn: str 
       tip.appendChild(nm);tip.appendChild(document.createElement('br'));
       tip.appendChild(fl);tip.appendChild(document.createElement('br'));tip.appendChild(mt);
     }}).on('mouseleave',function(){{tip.style.display='none';}});
+    node.on('click',function(e,d){{
+      e.stopPropagation();
+      showNodeDetail(d);
+      node.selectAll('circle').attr('stroke-width',function(n){{return n.nid===d.nid?4:(n.kind==='route'?2:1.5);}})
+        .attr('stroke',function(n){{return n.nid===d.nid?'#fbbf24':(n.kind==='route'?'#fff':'#0f1923');}});
+    }});
+    applyChangeFilter();
     sim.on('tick',function(){{
       link.attr('x1',function(d){{return d.source.x;}}).attr('y1',function(d){{return d.source.y;}})
           .attr('x2',function(d){{return d.target.x;}}).attr('y2',function(d){{return d.target.y;}});
       node.attr('transform',function(d){{return 'translate('+d.x+','+d.y+')';}});
     }});
     sim.on('end',function(){{
-      var b=g.node().getBBox();
-      if(!b.width||!b.height)return;
-      var pad=40,sc=Math.min((W-pad*2)/b.width,(H-pad*2)/b.height,1.5);
-      var tx=W/2-sc*(b.x+b.width/2),ty=H/2-sc*(b.y+b.height/2);
-      svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity.translate(tx,ty).scale(sc));
+      fitActive();
     }});
     document.getElementById('d3search').addEventListener('input',function(){{
-      var q=this.value.trim().toLowerCase();
-      node.selectAll('circle').attr('opacity',function(d){{
-        return (!q||d.name.toLowerCase().includes(q)||d.file.toLowerCase().includes(q))?1:.08;
-      }});
+      searchQuery=this.value.trim().toLowerCase();
+      applyChangeFilter();
     }});
   }})();
   </script>

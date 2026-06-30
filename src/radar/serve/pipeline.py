@@ -10,7 +10,12 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def compute_full_state(root: Path, *, rules_only: bool = False) -> dict:
+def compute_full_state(
+    root: Path,
+    *,
+    rules_only: bool = False,
+    engines: list[str] | None = None,
+) -> dict:
     """Run the whole offline pipeline once and return a state dict.
 
     Keys: findings (list[Finding]), suppressed (int), risk_map (id->RiskScore),
@@ -18,20 +23,23 @@ def compute_full_state(root: Path, *, rules_only: bool = False) -> dict:
     history (list). AI triage is NOT run here (on-demand only via the orchestrator).
     """
     from radar.scan import findings as findings_mod
-    from radar.scan.findings import SEVERITY_ORDER
-    from radar.scan.gitleaks_runner import run_gitleaks
+    from radar.scan.engines import ran_any, runs_summary, scan_all
     from radar.scan.history import load as load_history
     from radar.scan.history import record
-    from radar.scan.runner import ScanError, detect_runtime, run_semgrep
+    from radar.scan.runner import ScanError
     from radar.scan.suppress import filter_findings
 
     # ── 1. Scan (offline; AI triage is on-demand, not here) ──────────────────
+    runs = []
     try:
-        runtime = detect_runtime()
-        raw = run_semgrep(root, rules_only=rules_only, sarif=False, extra_config=[], runtime=runtime)
-        items = findings_mod.parse(raw)
-        items.extend(run_gitleaks(root))
-        items.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 3), f.path, f.line))
+        items, runs = scan_all(
+            root,
+            rules_only=rules_only,
+            engines=engines,
+            extra_config=[],
+        )
+        if not ran_any(runs):
+            items = []
         items, suppressed = filter_findings(items, root)
     except ScanError:
         items, suppressed = [], []
@@ -92,4 +100,6 @@ def compute_full_state(root: Path, *, rules_only: bool = False) -> dict:
         "mermaid_src": mermaid_src,
         "trace_label": trace_label,
         "history": history,
+        "engine_runs": runs,
+        "engine_summary": runs_summary(runs) if runs else "",
     }

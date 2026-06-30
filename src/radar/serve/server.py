@@ -237,7 +237,7 @@ def _pick_port(preferred: int | None) -> int:
 
 def serve(root: Path, *, port: int | None = None, open_browser: bool = False,
           extensions: set[str] | None = None, rules_only: bool = False,
-          use_docker: bool = False) -> None:
+          use_docker: bool = False, engines: list[str] | None = None) -> None:
     """Start the live dashboard server. Blocks until Ctrl-C.
 
     Binds 127.0.0.1 only, auto-picks a free port when `port` is None/busy,
@@ -251,7 +251,13 @@ def serve(root: Path, *, port: int | None = None, open_browser: bool = False,
     chosen = _pick_port(port)
 
     broadcaster = Broadcaster()
-    orch = Orchestrator(broadcaster, root, rules_only=rules_only, use_docker=use_docker)
+    orch = Orchestrator(
+        broadcaster,
+        root,
+        rules_only=rules_only,
+        use_docker=use_docker,
+        engines=engines,
+    )
     handler_cls = make_handler(broadcaster, orch)
 
     httpd = _DashboardServer((_HOST, chosen), handler_cls)
