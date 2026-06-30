@@ -438,16 +438,12 @@ class TestComputeFullStatePathNormalization:
 
         (tmp_path / "app.js").write_text("const x = 1;\n", encoding="utf-8")
         abs_path = str(tmp_path / "app.js")  # absolute, OS-native separators
-        fake_raw = {"results": [{
-            "path": abs_path,
-            "check_id": "rules.js-weak-hash-algorithm",
-            "start": {"line": 2},
-            "extra": {"severity": "WARNING", "message": "weak hash"},
-        }]}
+        fake_items = [
+            Finding("WARNING", abs_path, 2, "rules.js-weak-hash-algorithm", "weak hash")
+        ]
+        from radar.scan.engines import EngineRun
 
-        with patch("radar.scan.runner.run_semgrep", return_value=fake_raw), \
-             patch("radar.scan.runner.detect_runtime", return_value="native"), \
-             patch("radar.scan.gitleaks_runner.run_gitleaks", return_value=[]):
+        with patch("radar.scan.engines.scan_all", return_value=(fake_items, [EngineRun("semgrep", "ok", count=1)])):
             data = pipeline.compute_full_state(tmp_path)
 
         paths = [f.path for f in data["findings"]]
@@ -462,15 +458,12 @@ class TestComputeFullStatePathNormalization:
         from radar.serve import pipeline
 
         (tmp_path / "app.js").write_text("const x = 1;\n", encoding="utf-8")
-        fake_raw = {"results": [{
-            "path": str(tmp_path / "app.js"),
-            "check_id": "rules.js-weak-hash-algorithm",
-            "start": {"line": 2},
-            "extra": {"severity": "WARNING", "message": "weak hash"},
-        }]}
-        with patch("radar.scan.runner.run_semgrep", return_value=fake_raw), \
-             patch("radar.scan.runner.detect_runtime", return_value="native"), \
-             patch("radar.scan.gitleaks_runner.run_gitleaks", return_value=[]):
+        fake_items = [
+            Finding("WARNING", str(tmp_path / "app.js"), 2, "rules.js-weak-hash-algorithm", "weak hash")
+        ]
+        from radar.scan.engines import EngineRun
+
+        with patch("radar.scan.engines.scan_all", return_value=(fake_items, [EngineRun("semgrep", "ok", count=1)])):
             data = pipeline.compute_full_state(tmp_path)
 
         orch, bc, stream = _make_orch(tmp_path)

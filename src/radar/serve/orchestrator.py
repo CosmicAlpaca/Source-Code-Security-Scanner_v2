@@ -114,11 +114,12 @@ class Orchestrator:
     """Owns State, recomputes on file change, and pushes SSE events."""
 
     def __init__(self, broadcaster, root: Path, *, rules_only: bool = False,
-                 use_docker: bool = False) -> None:
+                 use_docker: bool = False, engines: list[str] | None = None) -> None:
         self.bc = broadcaster
         self.root = root
         self.rules_only = rules_only
         self.use_docker = use_docker
+        self.engines = engines
         self.state = State()
         self.state.repo_path = str(root)
         self._lock = threading.Lock()
@@ -128,7 +129,11 @@ class Orchestrator:
     def compute_full(self) -> None:
         """Run the whole pipeline and push every panel. Called at startup + heavy."""
         self._push_status("scanning…", "busy")
-        data = compute_full_state(self.root, rules_only=self.rules_only)
+        data = compute_full_state(
+            self.root,
+            rules_only=self.rules_only,
+            engines=self.engines,
+        )
         with self._lock:
             self.state.findings = data["findings"]
             self.state.suppressed = data["suppressed"]
@@ -139,7 +144,10 @@ class Orchestrator:
         # graph + findings are set. Cheap (cached graph + BFS, no semgrep).
         self._compute_impact()
         self._push_all_panels()
-        self._push_status("idle", "ok")
+        if data.get("engine_summary"):
+            self._push_status(f"idle · {data['engine_summary']}", "ok")
+        else:
+            self._push_status("idle", "ok")
 
     # ── Fast path: a single file changed ─────────────────────────────────────
     def on_change(self, path: Path) -> None:

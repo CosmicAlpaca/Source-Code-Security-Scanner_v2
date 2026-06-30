@@ -189,6 +189,35 @@ class TestRenderBlastFragment:
         html = render_blast_fragment(trace_res=trace_res, mermaid_src="graph LR\nA-->B")
         assert "Functions Affected" in html or "Changed Nodes" in html
 
+    def test_d3_node_click_detail_panel_is_rendered(self):
+        changed = types.SimpleNamespace(
+            id="app.py::handler", name="handler", kind="function", file="app.py",
+            line=10, feature="Auth", depth=0, via_changed="", parent="",
+            confidence="resolved", routes=["POST /login"], findings=[],
+        )
+        affected = types.SimpleNamespace(
+            id="routes.py::route:POST /login", name="POST /login", kind="route",
+            file="routes.py", line=5, feature="", depth=1,
+            via_changed="app.py::handler", parent="app.py::handler",
+            confidence="resolved", routes=[], findings=[{"severity": "ERROR", "rule": "x"}],
+        )
+        trace_res = types.SimpleNamespace(
+            stats={"functions_affected": 1, "apis_affected": 1,
+                   "features_affected": 1, "approximate": 0},
+            changed=[changed],
+            affected=[affected],
+            apis=[{"route": "POST /login", "file": "routes.py"}],
+        )
+        html = render_blast_fragment(trace_res=trace_res, repo_path="/code/app")
+        assert "d3node-detail" in html
+        assert "Selected Node" in html
+        assert "showNodeDetail" in html
+        assert "Changed entry points" in html
+        assert "data-change-id" in html
+        assert "applyChangeFilter" in html
+        assert "fitActive" in html
+        assert "app.py::handler" in html
+
     def test_returns_non_empty_string(self):
         html = render_blast_fragment()
         assert isinstance(html, str)

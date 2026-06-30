@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from radar.scan.timeouts import scan_timeout
+
 DOCKER_IMAGE = "semgrep/semgrep:latest"
 SEMGREP_PRESETS = ["p/security-audit", "p/secrets", "p/owasp-top-ten"]
 RULES_DIR = Path(__file__).resolve().parent.parent / "rules"
@@ -125,9 +127,12 @@ def run_semgrep(
         proc = subprocess.run(
             argv, capture_output=True, text=True,
             encoding="utf-8", errors="replace", env=semgrep_env,
+            timeout=scan_timeout(),
         )
     except OSError as exc:
         raise ScanError(f"Failed to launch Semgrep ({runtime}): {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ScanError(f"Semgrep ({runtime}) timed out after {scan_timeout()}s") from exc
 
     try:
         report = json.loads(proc.stdout)

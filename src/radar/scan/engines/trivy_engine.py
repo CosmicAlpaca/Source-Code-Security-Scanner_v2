@@ -15,6 +15,7 @@ from pathlib import Path
 
 from radar.scan.engines.base import ScanEngine, register
 from radar.scan.findings import Finding
+from radar.scan.timeouts import scan_timeout
 
 DOCKER_IMAGE = "aquasec/trivy:latest"
 _SCANNERS = "vuln,misconfig,secret"
@@ -125,8 +126,9 @@ class TrivyEngine(ScanEngine):
             proc = subprocess.run(
                 self._argv(target, runtime), capture_output=True, text=True,
                 encoding="utf-8", errors="replace",
+                timeout=scan_timeout(),
             )
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             return []
         try:
             report = json.loads(proc.stdout or "{}")

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from radar.scan.engines.base import ScanEngine, register
 from radar.scan.findings import Finding
+from radar.scan.timeouts import scan_timeout
 
 # Bandit severity (LOW/MEDIUM/HIGH) -> radar severity.
 _SEV = {"HIGH": "ERROR", "MEDIUM": "WARNING", "LOW": "INFO"}
@@ -126,8 +127,9 @@ class BanditEngine(ScanEngine):
             proc = subprocess.run(
                 argv, capture_output=True, text=True,
                 encoding="utf-8", errors="replace",
+                timeout=scan_timeout(),
             )
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             return []
         try:
             report = json.loads(proc.stdout or "{}")

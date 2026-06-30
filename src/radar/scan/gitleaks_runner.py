@@ -13,6 +13,7 @@ import urllib.request
 import zipfile
 
 from radar.scan.findings import Finding
+from radar.scan.timeouts import scan_timeout
 
 Runtime = Literal["native", "docker", "vendored"]
 DOCKER_IMAGE = "zricethezav/gitleaks:latest"
@@ -121,7 +122,15 @@ def run_gitleaks(target: Path, runtime: Runtime | None = None) -> list[Finding]:
         ]
 
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        proc = subprocess.run(
+            argv, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=scan_timeout(),
+        )
+    except subprocess.TimeoutExpired:
+        Path(out_file).unlink(missing_ok=True)
+        print(f"[dim yellow]⚠ gitleaks timed out after {scan_timeout()}s[/]")
+        return []
     except OSError as exc:
         Path(out_file).unlink(missing_ok=True)
         print(f"[dim yellow]⚠ gitleaks failed: {exc}[/]")
