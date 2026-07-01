@@ -39,6 +39,27 @@ radar --help
 
 > **Windows**: nếu `pip`/`radar` bị chặn bởi policy, dùng `python -m pip install …` và `python -m radar.cli` thay thế.
 
+### Chạy nhanh toàn bộ tools
+
+Sau khi cài xong, dùng các lệnh dưới đây để kiểm tra runtime và quét một repo bằng tất cả scanner mặc định:
+
+```bash
+radar engines
+radar scan <đường-dẫn-repo> --all-tools
+radar scan <đường-dẫn-repo> --all-tools --format json > radar-findings.json
+radar report <đường-dẫn-repo> --all-tools --out radar-dashboard.html
+radar serve <đường-dẫn-repo> --all-tools --open
+```
+
+Ví dụ: dùng `.` để quét repo hiện tại, hoặc `../other-repo`, `E:\projects\my-app` để quét repo khác.
+
+`--all-tools` hiện chạy bộ engine mặc định: **Semgrep + Gitleaks + Bandit + Trivy**. Engine nào thiếu runtime sẽ được đánh dấu `unavailable`/`skipped`, các engine còn chạy được vẫn tiếp tục chạy.
+
+Lưu ý nhanh:
+- Không dùng chung `--all-tools` với `--engine`; nếu muốn chọn thủ công thì dùng `--engine semgrep --engine gitleaks`.
+- `--format sarif` hiện chỉ hỗ trợ Semgrep, nên khi cần SARIF hãy chạy `radar scan . --format sarif`.
+- `radar report --triage` hiện dùng luồng AI triage riêng, không kết hợp với `--all-tools` hoặc `--engine`.
+
 `radar scan`/`serve` cần một **Semgrep** runtime trên mỗi máy (radar gọi qua subprocess, không phải pip-dep) — tool tự tìm theo thứ tự:
 - **native** `semgrep` trên PATH (Linux/Mac: `pipx install semgrep`), hoặc
 - **Docker** (`semgrep/semgrep`) — fallback khi không có native (Windows thường dùng cách này, chỉ cần Docker Desktop bật).
@@ -54,6 +75,7 @@ Quét ngay trên máy, không cần CI, **không ghi gì** vào repo được qu
 ```bash
 radar scan .                          # quét repo hiện tại (preset + 50 custom rules)
 radar scan ../other-repo              # quét repo khác
+radar scan . --all-tools              # chạy toàn bộ engine mặc định: Semgrep + Gitleaks + Bandit + Trivy
 radar scan --rules-only               # offline: chỉ custom rules, bỏ preset (không cần mạng)
 radar scan --format json > out.json   # máy đọc
 radar scan --format sarif > out.sarif # nạp vào tab Security / công cụ khác
@@ -182,6 +204,7 @@ Không muốn chạy `scan` / `impact` riêng lẻ? `radar report` gói **findin
 
 ```bash
 radar report .                 # dashboard offline: findings xếp theo risk + impact graph + history
+radar report . --all-tools     # dashboard dùng tất cả engine mặc định
 radar report . --triage        # THÊM cột reachability + AI verdict, AI nâng cấp thứ hạng (opt-in)
 radar report . --out dash.html # chọn đường dẫn output
 ```
@@ -262,6 +285,7 @@ Không muốn chạy lại lệnh mỗi lần sửa code? `radar serve` mở **1
 ```bash
 pip install ".[watch]"        # cần watchdog để live-update; không có → static mode
 radar serve .                 # mở dashboard tại 127.0.0.1:7070
+radar serve . --all-tools     # live dashboard dùng tất cả engine mặc định
 radar serve . --port 8080     # đổi port
 radar serve . --open          # tự mở tab trình duyệt
 radar serve . --rules-only    # offline: chỉ custom rules (không cần mạng)
